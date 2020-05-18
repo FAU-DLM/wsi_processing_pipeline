@@ -579,9 +579,10 @@ def ExtractTileFromPILImage(path:Union[str, pathlib.Path], x:int, y:int, width:i
     Return:
         tile as PIL.Image as RGB
     """
-    pil_img = PIL.Image.open(path)
-    pil_img = pil_img.crop((x, y, x+width, y+height))
-    return pil_img
+    #pil_img = PIL.Image.open(path)
+    #pil_img = pil_img.crop((x, y, x+width, y+height))
+    #return pil_img
+    return ExtractTileFromWSI(path=path, x=x, y=y, width=width, height=height, level=0);
 
 
 def WsiOrROIToTiles(wsi_path:pathlib.Path, 
