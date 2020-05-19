@@ -1,4 +1,5 @@
 .ipynb_checkpoints/
 __pycache__/
 /tile_extraction/.vs
+preprocessing/models/
 postprocessing/models/
