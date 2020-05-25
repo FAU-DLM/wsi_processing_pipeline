@@ -61,18 +61,54 @@ class DatasetType(Enum):
 
 
 class WsiInfo:
+    path:pathlib.Path = None
     patient_id = None
     case_id = None
     slide_id = None
     classification_labels = None
     dataset_type = None
+    rois:List[RegionOfInterest] = None
 
-    def __init__(self, patient_id:str, case_id:str, slide_id:str, classification_labels:List, dataset_type:DatasetType):
+    def __init__(self, 
+                 path:Union[str,pathlib.Path], 
+                 patient_id:str, case_id:str, 
+                 slide_id:str, 
+                 classification_labels:List[str], 
+                 dataset_type:DatasetType, 
+                 rois:List[RegionOfInterest]):
+        self.path = pathlib.Path(path)
         self.patient_id = patient_id
         self.case_id = case_id
         self.slide_id = slide_id
         self.classification_labels = classification_labels
         self.dataset_type = dataset_type
+        self.rois = rois
+
+class RegionOfInterest:
+    """
+    represents a region of interest within a whole-slide image
+    """
+    x_upper_left:int = None
+    y_upper_left:int = None
+    height:int = None
+    width:int = None
+    level:int = None
+
+    def __init__(self, x_upper_left:int, y_upper_left:int, height:int, width:int, level:int):
+        """
+            Arguments:
+            x_upper_left: x coordinate of roi's upper left point
+            y_upper_left: y coordinate of roi's upper left point
+            height: roi's height in pixel
+            width: roi's width in pixel
+            level: level of the whole-slide image. 0 means highest resolution. Leave it 0 if you use e.g. png files instead of a whole-slide image format like .ndpi
+        """
+        self.x_upper_left = x_upper_left
+        self.y_upper_left = y_upper_left
+        self.height = height
+        self.width = width
+        self.level = level
+
 
 
 class TileSummary:
@@ -81,7 +117,6 @@ class TileSummary:
     """
 
     wsi_path = None
-    is_wsi = None
     tiles_folder_path = None
     orig_w = None
     orig_h = None
@@ -114,7 +149,6 @@ class TileSummary:
 
     def __init__(self, 
                  wsi_path,
-                 is_wsi,
                  tiles_folder_path, 
                  orig_w, 
                  orig_h, 
@@ -137,8 +171,25 @@ class TileSummary:
                  slide_id = None, 
                  classification_labels = None, 
                  dataset_type:DatasetType = None):
+
+        """
+        Arguments:
+            orig_w, orig_h: original height and original width depend on the specified level. With each level, the dimensions half.
+            scale_factor:  Downscaling is applied during tile calculation to speed up the process. The tiles in the end get extracted from the full resolution
+                                 the full resolution depends on the level, the user specifies. The higher the level, the lower the resolution/magnification.
+                                 Therefore less downsampling needs to be applied during tile calculation, to achieve same speed up.
+                                 So e.g. the wsi has dimensions of 10000x10000 pixels on level 0. A scale_factor of 32 is speficied. Then calculations will be applied on
+                                 a downscaled version of the wsi with dimensions on the level log2(32)
+
+            real_scale_factor: if a scale_factor of e.g. 32 is specified and a level of 0, from which the tiles shall be extracted, scale_factor==real_scale_factor.
+                                 For each level, the wsi dimensions half.
+                                 That means for a scale_factor of 32 and level 1 the real_scale_factor would be only 16.
+                                 downscaling is applied during tile calculation to speed up the process. The tile in the end get extracted from the full resolution
+                                 The full resolution depends on the level, the user specifies. The higher the level, the lower the resolution/magnification.
+                                 Therefore less downsampling needs to be applied during tile calculation, to achieve same speed up.
+        """
+
         self.wsi_path = wsi_path
-        self.is_wsi = is_wsi
         self.tiles_folder_path = tiles_folder_path
         self.orig_w = orig_w
         self.orig_h = orig_h
@@ -293,7 +344,7 @@ class TileSummary:
                                    figsize:Tuple[int] = (10,10),
                                    scale_factor:int = 32):
         """    
-        Loads a whole slide image, scales it down, converts it into a numpy array and shows it with a grid overlay for all tiles
+        Loads a whole slide image, scales it down, converts it into a numpy array and displays it with a grid overlay for all tiles
         that passed scoring to visualize which tiles e.g. "tiles.WsiOrROIToTilesMultithreaded" calculated as worthy to keep.
         Arguments:
             figsize: Size of the plotted matplotlib figure containing the image.
@@ -321,7 +372,6 @@ class Tile:
     """
     tile_summary = None
     wsi_path = None
-    is_wsi = None
     tiles_folder_path = None
     np_scaled_tile = None
     tile_num = None
@@ -352,8 +402,7 @@ class Tile:
                 
     def __init__(self, 
                  tile_summary, 
-                 wsi_path, 
-                 is_wsi, 
+                 wsi_path,  
                  tiles_folder_path, 
                  np_scaled_tile, 
                  tile_num, 
@@ -383,7 +432,6 @@ class Tile:
                  dataset_type:DatasetType = None):
         self.tile_summary = tile_summary
         self.wsi_path = wsi_path
-        self.is_wsi = is_wsi
         self.tiles_folder_path = tiles_folder_path
         self.np_scaled_tile = np_scaled_tile
         self.tile_num = tile_num
@@ -426,16 +474,16 @@ class Tile:
         return tissue_quantity(self.tissue_percentage)
 
     def get_pil_tile(self):
-        return tile_to_pil_tile(self, self.is_wsi)
+        return tile_to_pil_tile(self)
 
     def get_np_tile(self):
         return tile_to_np_tile(self)
 
     def save_tile(self):
-        save_display_tile(self, save=True, display=False, is_wsi=self.is_wsi)
+        save_display_tile(self, save=True, display=Falsei)
 
     def display_tile(self):
-        save_display_tile(self, save=False, display=True, is_wsi=self.is_wsi)
+        save_display_tile(self, save=False, display=True)
 
     def display_with_histograms(self):
         display_tile(self, rgb_histograms=True, hsv_histograms=True)
@@ -460,7 +508,7 @@ class Tile:
     
     def get_y(self):
         """
-        upper left x coordinate
+        upper left y coordinate
         """
         return self.o_r_s
     
@@ -592,7 +640,6 @@ def WsiOrROIToTiles(wsi_path:pathlib.Path,
                tile_naming_func:Callable = tile_naming_function_default,
                tile_score_thresh:float = 0.55,
                tile_scoring_function = scoring_function_1,
-               is_wsi:bool = True, 
                level = 0, 
                save_tiles:bool = False, 
                return_as_tilesummary_object = False, 
@@ -610,47 +657,39 @@ def WsiOrROIToTiles(wsi_path:pathlib.Path,
     tile_width: Number of pixels tile width.
     tile_score_thresh: Tiles with a score higher than the number from "tileScoringFunction" will be saved.
     tile_scoring_function: Function to score one tile to determine if it should be saved or not.
-    is_wsi: if true, a WSI format like .ndpi is assumed, if false, a format like png is assumed (ROI)
     tile_naming_func: 99% of the time there should be no necessity to change this.
                         A function, that takes a pathlib.Path to the WSI or ROI as an argument and returns a string.
                         This string will then be used as part of the name for the tile (plus some specific tile information and
                         the file format .png, whick is generated by this library).
                         
-    level: Level of the WSI you want to extract the tile from. 0 means highest resolution.
+    level: Level of the WSI you want to extract the tiles from. 0 means highest resolution. For not wsi formats like .png leave it at 0.
     save_tiles: if True the tiles will be extracted and saved to {tilesFolderPath}
     return_as_tilesummary_object: return_as_tilesummary_object: Set this to true, if you 
                                     want the TileSummary object and not a pandas dataframe.
-    wsi_info: a WsiInfo object. If you specify this, its information will also be set for all Tile objects in the resultin TileSummary object
+    wsi_info: not mandatory; a WsiInfo object. If you specify this, its information will also be set for all Tile objects in the resulting TileSummary object.
     Return:
     if return_as_tilesummary_object == True:
        a TileSummary object will be returned
     else:
         pandas dataframe with coloumns: ['tile_name','wsi_path','level','x_upper_left','y_upper_left','pixels_width','pixels_height']
     """    
-    if(not is_wsi and level != 0):
-        raise ValueError("Specifiying a level only makes sense when extracting tiles from WSIs. Just leave the default value.")
+
     if(tiles_folder_path is None and save_tiles == True):
         raise ValueError("You should specify a {tiles_folder_path}")
         
     print(f"Starting to process {str(wsi_path)}")
-    if(is_wsi):
-        scale_factor = 32
-    else:
-        scale_factor = 1
+    
+    scale_factor = 32
+
     ### against DecompressionBombWarning
     #mage.MAX_IMAGE_PIXELS = 10000000000000
     openslide.lowlevel._load_image = openslide_overwrite._load_image
-    if(is_wsi):
-        img_pil, original_width, original_height, scaled_width, scaled_height, best_level_for_downsample = wsi_to_scaled_pil_image(wsi_path, scale_factor, level)
-    else:
-        img_pil = Image.open(wsi_path)
-        original_width = scaled_width = img_pil.width
-        original_height = scaled_height = img_pil.height
-        best_level_for_downsample = 0
+
+    img_pil, original_width, original_height, scaled_width, scaled_height, best_level_for_downsample = wsi_to_scaled_pil_image(wsi_path, scale_factor, level)
+
                 
     img_pil_filtered = filter.filter_img(img_pil)
     tilesummary = create_tilesummary(wsi_path,
-                                     is_wsi,
                                      tiles_folder_path, 
                                      img_pil, 
                                      img_pil_filtered, 
@@ -700,8 +739,7 @@ def WsiOrROIToTilesMultithreaded(wsi_paths:List[pathlib.Path],
                              tile_width:int,
                              tile_naming_func:Callable = tile_naming_function_default,
                              tile_score_thresh:float = 0.55,
-                             tile_scoring_function = scoring_function_1, 
-                             is_wsi = True, 
+                             tile_scoring_function = scoring_function_1,  
                              level = 0, 
                              save_tiles:bool = False, 
                              return_as_tilesummary_object = False, 
@@ -716,12 +754,11 @@ def WsiOrROIToTilesMultithreaded(wsi_paths:List[pathlib.Path],
     tile_width: Number of pixels tile width.
     tile_score_thresh: Tiles with a score higher than the number from "tileScoringFunction" will be saved.
     tile_scoring_function: Function to score one tile to determine if it should be saved or not.
-    is_wsi: if true, a WSI format like .ndpi is assumed, if false, a format like png is assumed (ROI)
     tile_naming_func: 99% of the time there should be no necessity to change this.
                         A function, that takes a pathlib.Path to the WSI or ROI as an argument and returns a string.
                         This string will then be used as part of the name for the tile (plus some specific tile information and
                         the file format .png, whick is generated by this library).
-    level: Level of the WSI you want to extract the tile from. 0 means highest resolution.
+    level: Level of the WSI you want to extract the tile from. 0 means highest resolution. For not wsi formats like .png leave it at 0.
     save_tiles: if True the tiles will be extracted and saved to {tilesFolderPath}
     return_as_tilesummary_object: Set this to true, if you want the TileSummary object and not a pandas dataframe.
     wsi_path_to_wsi_info: a dict with key: wsi_path and value WsiInfo object. If you set this, the info will we passed down to all tiles in the tilesummary result
@@ -748,7 +785,6 @@ def WsiOrROIToTilesMultithreaded(wsi_paths:List[pathlib.Path],
                                    tile_naming_func,
                                    tile_score_thresh, 
                                    tile_scoring_function, 
-                                   is_wsi, 
                                    level, 
                                    save_tiles, 
                                    return_as_tilesummary_object, 
@@ -804,7 +840,6 @@ def wsi_to_scaled_pil_image(wsi_filepath:pathlib.Path, scale_factor = 32, level 
 
 
 def create_tilesummary(wsiPath,
-                       is_wsi,
                         tilesFolderPath,
                         img_pil:PIL.Image.Image, 
                         img_pil_filtered:PIL.Image.Image, 
@@ -832,7 +867,6 @@ def create_tilesummary(wsiPath,
     tile_sum = score_tiles(np_img, 
                            np_img_filtered, 
                            wsiPath,
-                           is_wsi,
                            tilesFolderPath,
                            tile_height,
                            tile_width,
@@ -845,7 +879,8 @@ def create_tilesummary(wsiPath,
                            tile_scoring_function, 
                            tile_naming_func, 
                            level, 
-                           best_level_for_downsample)
+                           best_level_for_downsample, 
+                           wsi_info.rois)
 
     if wsi_info is not None:
         tile_sum.set_wsi_info(wsi_info)
@@ -900,42 +935,30 @@ def get_tile_indices(rows, cols, row_tile_size, col_tile_size):
 
 
 
-def tile_to_pil_tile(tile:Tile, is_wsi:bool):
+def tile_to_pil_tile(tile:Tile):
       """
       Convert tile information into the corresponding tile as a PIL image read from the whole-slide image file.
 
       Args:
         tile: Tile object.
-        is_wsi: if true, a WSI format like .ndpi is assumed, if false, a format like png is assumed (ROI)
 
       Return:
         Tile as a PIL image.
       """
-      #x, y = tile.o_c_s, tile.o_r_s
-      #width, height = tile.o_c_e - tile.o_c_s, tile.o_r_e - tile.o_r_s
-      x = tile.get_x()
-      y = tile.get_y()
-      width = tile.get_width()
-      height = tile.get_height()
-      if(is_wsi):
-          pil_img = ExtractTileFromWSI(tile.wsi_path, x, y, width, height, tile.level)
-      else:
-          pil_img = ExtractTileFromPILImage(tile.wsi_path, x, y, width, height)
-      return pil_img
+      return ExtractTileFromWSI(tile.wsi_path, tile.get_x(), tile.get_y(), tile.get_width(), tile.get_height(), tile.level)
 
 
-def tile_to_np_tile(tile, is_wsi:bool):
+def tile_to_np_tile(tile):
   """
   Convert tile information into the corresponding tile as a NumPy image read from the whole-slide image file.
 
   Args:
     tile: Tile object.
-    is_wsi: if true, a WSI format like .ndpi is assumed, if false, a format like png is assumed (ROI)
 
   Return:
     Tile as a NumPy image.
   """
-  pil_img = tile_to_pil_tile(tile, is_wsi)
+  pil_img = tile_to_pil_tile(tile)
   np_img = util.pil_to_np_rgb(pil_img)
   return np_img
 
@@ -963,7 +986,7 @@ def get_tile_image_path(tile:Tile):
 
 
 
-def save_display_tile(tile, save, display, is_wsi:bool):
+def save_display_tile(tile, save, display):
   """
   Save and/or display a tile image.
 
@@ -972,7 +995,7 @@ def save_display_tile(tile, save, display, is_wsi:bool):
     save: If True, save tile image.
     display: If True, dispaly tile image.
   """
-  tile_pil_img = tile_to_pil_tile(tile, is_wsi)
+  tile_pil_img = tile_to_pil_tile(tile)
 
   if save:
     t = Time()
@@ -991,7 +1014,6 @@ def save_display_tile(tile, save, display, is_wsi:bool):
 def score_tiles(img_np:np.array, 
                 img_np_filtered:np.array, 
                 wsi_path:pathlib.Path,
-                is_wsi:bool,
                 tilesFolderPath:pathlib.Path,
                 tile_height:int, 
                 tile_width:int, 
@@ -1004,9 +1026,13 @@ def score_tiles(img_np:np.array,
                 tile_scoring_function, 
                 tile_naming_func, 
                 level:int, 
-                best_level_for_downsample:int) -> TileSummary:
+                best_level_for_downsample:int, 
+                rois:List[RegionOfInterest]) -> TileSummary:
     """
-    Score all tiles for a slide and return the results in a TileSummary object.
+    Scores all tiles for a slide and returns the results in a TileSummary object.
+    If regions of interests are specified, only tiles within those regions will be scored to reduce processing time.
+    Tiles within those regions will be cut to fit exactly into the region. So there will be tiles that are smaller than 
+    the specified height and width.
 
     Args:
 
@@ -1020,6 +1046,9 @@ def score_tiles(img_np:np.array,
     #tile_height_scaled = round(tile_height / scale_factor)  # use round?
     #tile_width_scaled = round(tile_width / scale_factor)  # use round?
     
+
+
+    
     real_scale_factor = int(math.pow(2,best_level_for_downsample-level))
     tile_height_scaled = round(tile_height / real_scale_factor)  # use round?
     tile_width_scaled = round(tile_width / real_scale_factor)  # use round?
@@ -1030,7 +1059,6 @@ def score_tiles(img_np:np.array,
                                                  tile_width_scaled)
 
     tile_sum = TileSummary(wsi_path=wsi_path,
-                           is_wsi=is_wsi,
                            tiles_folder_path=tilesFolderPath,
                              orig_w=wsi_original_width,
                              orig_h=wsi_original_height,
@@ -1050,48 +1078,64 @@ def score_tiles(img_np:np.array,
                              real_scale_factor=real_scale_factor)   
     
 
+
     count = 0
     high = 0
     medium = 0
     low = 0
     none = 0
-    tile_indices = get_tile_indices(wsi_scaled_height, wsi_scaled_width, tile_height_scaled, tile_width_scaled)
-    for t in tile_indices:
-        count += 1  # tile_num
-        r_s, r_e, c_s, c_e, r, c = t
-        np_tile = img_np_filtered[r_s:r_e, c_s:c_e]
-        t_p = filter.tissue_percent(np_tile)
-        amount = tissue_quantity(t_p)
-        if amount == TissueQuantity.HIGH:
-            high += 1
-        elif amount == TissueQuantity.MEDIUM:
-            medium += 1
-        elif amount == TissueQuantity.LOW:
-            low += 1
-        elif amount == TissueQuantity.NONE:
-            none += 1
+
+    #if no rois are specified, just create one "fake" roi, that is as big as the whole image
+    if(rois is None or len(rois) == 0):
+        rois = [RegionOfInterest(0,0, wsi_original_height, wsi_original_width, level)]
+
+
+    for roi in rois:
+        # if roi level and tile extraction level differ, adjust roi dimensions to the tile level 
+        # e.g. roi level is 0, tile level is 2 -> divide roi dimensions by 2^(2-0)
+        if(roi.level != level):
+            #TODO
+
+
+        #TODO (still original state)
+        tile_indices = get_tile_indices(wsi_scaled_height, wsi_scaled_width, tile_height_scaled, tile_width_scaled)
+        for t in tile_indices:
+            count += 1  # tile_num
+            r_s, r_e, c_s, c_e, r, c = t
+            np_tile = img_np_filtered[r_s:r_e, c_s:c_e]
+            t_p = filter.tissue_percent(np_tile)
+            amount = tissue_quantity(t_p)
+            if amount == TissueQuantity.HIGH:
+                high += 1
+            elif amount == TissueQuantity.MEDIUM:
+                medium += 1
+            elif amount == TissueQuantity.LOW:
+                low += 1
+            elif amount == TissueQuantity.NONE:
+                none += 1
             
-        o_c_s, o_r_s = slide.small_to_large_mapping((c_s, r_s), (wsi_original_width, wsi_original_height), real_scale_factor)
-        #print("o_c_s: " + str(o_c_s))
-        #print("o_r_s: " + str(o_r_s))
-        o_c_e, o_r_e = slide.small_to_large_mapping((c_e, r_e), (wsi_original_width, wsi_original_height), real_scale_factor)
-        #print("o_c_e: " + str(o_c_e))
-        #print("o_r_e: " + str(o_r_e))
+            o_c_s, o_r_s = slide.small_to_large_mapping((c_s, r_s), (wsi_original_width, wsi_original_height), real_scale_factor)
+            #print("o_c_s: " + str(o_c_s))
+            #print("o_r_s: " + str(o_r_s))
+            o_c_e, o_r_e = slide.small_to_large_mapping((c_e, r_e), (wsi_original_width, wsi_original_height), real_scale_factor)
+            #print("o_c_e: " + str(o_c_e))
+            #print("o_r_e: " + str(o_r_e))
 
-        # pixel adjustment in case tile dimension too large (for example, 1025 instead of 1024)
-        if (o_c_e - o_c_s) > tile_width:
-            o_c_e -= 1
-        if (o_r_e - o_r_s) > tile_height:
-            o_r_e -= 1
+            # pixel adjustment in case tile dimension too large (for example, 1025 instead of 1024)
+            if (o_c_e - o_c_s) > tile_width:
+                o_c_e -= 1
+            if (o_r_e - o_r_s) > tile_height:
+                o_r_e -= 1
 
-        score, color_factor, s_and_v_factor, quantity_factor = score_tile(np_tile, t_p, r, c, tile_scoring_function)
+            score, color_factor, s_and_v_factor, quantity_factor = score_tile(np_tile, t_p, r, c, tile_scoring_function)
 
-        np_tile #if small_tile_in_tile else None
+            np_tile #if small_tile_in_tile else None
         
-        tile = Tile(tile_sum, wsi_path, is_wsi, tilesFolderPath, np_tile, count, r, c, r_s, r_e, c_s, c_e, o_r_s, o_r_e, o_c_s,
-                    o_c_e, t_p, color_factor, s_and_v_factor, quantity_factor, score, tile_naming_func, level, 
-                    best_level_for_downsample, real_scale_factor)
-        tile_sum.tiles.append(tile)
+            tile = Tile(tile_sum, wsi_path, tilesFolderPath, np_tile, count, r, c, r_s, r_e, c_s, c_e, o_r_s, o_r_e, o_c_s,
+                        o_c_e, t_p, color_factor, s_and_v_factor, quantity_factor, score, tile_naming_func, level, 
+                        best_level_for_downsample, real_scale_factor)
+            tile_sum.tiles.append(tile)
+
 
     tile_sum.count = count
     tile_sum.high = high
