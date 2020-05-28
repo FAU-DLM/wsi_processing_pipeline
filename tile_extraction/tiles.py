@@ -40,6 +40,7 @@ import pandas
 import pandas as pd
 import warnings
 from enum import Enum
+import copy
 
 from tile_extraction import util, filter, slide, openslide_overwrite
 from tile_extraction.util import Time
@@ -83,6 +84,32 @@ class RegionOfInterest:
         self.height = height
         self.width = width
         self.level = level
+        
+    def __repr__(self):
+        return f"x: {self.x_upper_left}, y: {self.y_upper_left}, height: {self.height}, width: {self.width}, level: {self.level}"
+        
+    def change_level_in_place(self, new_level:int):
+        """
+        adjusts all properties to new level in place and also returns itself
+        """
+        self.x_upper_left = util.adjust_level(value_to_adjust=self.x_upper_left, from_level=self.level, to_level=new_level)
+        self.y_upper_left = util.adjust_level(value_to_adjust=self.y_upper_left, from_level=self.level, to_level=new_level)
+        self.height = util.adjust_level(value_to_adjust=self.height, from_level=self.level, to_level=new_level)
+        self.width = util.adjust_level(value_to_adjust=self.width, from_level=self.level, to_level=new_level)
+        self.level = new_level
+        return self
+    
+    def change_level_deep_copy(self, new_level:int):
+        """
+        returns deep copy of itself with adjusted properties
+        """
+        dc = copy.deepcopy(self)
+        dc.x_upper_left = util.adjust_level(value_to_adjust=self.x_upper_left, from_level=self.level, to_level=new_level)
+        dc.y_upper_left = util.adjust_level(value_to_adjust=self.y_upper_left, from_level=self.level, to_level=new_level)
+        dc.height = util.adjust_level(value_to_adjust=self.height, from_level=self.level, to_level=new_level)
+        dc.width = util.adjust_level(value_to_adjust=self.width, from_level=self.level, to_level=new_level)
+        dc.level = new_level
+        return dc
 
 class WsiInfo:
     path:pathlib.Path = None
@@ -107,6 +134,14 @@ class WsiInfo:
         self.classification_labels = classification_labels
         self.dataset_type = dataset_type
         self.rois = rois
+        
+    def change_level_of_rois(self, new_level:int):
+        """
+            convenience function to change the level for all rois at once in place
+        """
+        for roi in self.rois:
+            if roi != None:
+                roi.change_level_in_place(new_level)
 
 
 class TileSummary:
@@ -352,18 +387,29 @@ class TileSummary:
             scale_factor: The larger, the faster this method works, but the plotted image has less resolution.
             tilesummary: a TileSummary object of one wsi
             wsi_path: Path to a whole-slide image
-            df_tiles: A pandas dataframe from e.g. "tiles.WsiOrROIToTilesMultithreaded" with spacial information about all tiles           
-            level: The level that was specified in e.g. "tiles.WsiOrROIToTilesMultithreaded". 0 means highest magnification.
+            df_tiles: A pandas dataframe from e.g. "tiles.WsiOrROIToTilesMultithreaded" with spacial information about all tiles     
         """
         wsi_pil, large_w, large_h, new_w, new_h, best_level_for_downsample = wsi_to_scaled_pil_image(self.wsi_path,
                                                                                                         scale_factor=self.scale_factor,
-                                                                                                        level=self.level)
+                                                                                                        level=0)
         wsi_np = util.pil_to_np_rgb(wsi_pil)
         boxes =[]
+        
+        print(len(self.top_tiles()))
+        
         for tile in self.top_tiles():
-            box = np.array([tile.get_x(), tile.get_y(), tile.get_width(), tile.get_height()])/scale_factor
+            x = util.adjust_level(tile.get_x(), tile.level, best_level_for_downsample)
+            y = util.adjust_level(tile.get_y(), tile.level, best_level_for_downsample)
+            width = util.adjust_level(tile.get_width(), tile.level, best_level_for_downsample)
+            height = util.adjust_level(tile.get_height(), tile.level, best_level_for_downsample)
+            box = np.array([x,y,width,height])
             boxes.append(box)
         util.show_np_with_bboxes(wsi_np, boxes, figsize)
+        
+        
+
+        
+      
             
 
 
@@ -554,6 +600,7 @@ class Tile:
 
     def set_dataset_type(self, dataset_type:DatasetType):
         self.dataset_type = dataset_type
+        
       
 
 class TissueQuantity(Enum):
@@ -1058,19 +1105,8 @@ def score_tiles(img_np:np.array,
     Returns:
     TileSummary object which includes a list of Tile objects containing information about each tile.
     """
-    #img_path = slide.get_filter_image_result(slide_num)
-    #o_w, o_h, w, h = slide.parse_dimensions_from_image_filename(img_path)
-    #np_img = slide.open_image_np(img_path)
-
-    #tile_height_scaled = round(tile_height / scale_factor)  # use round?
-    #tile_width_scaled = round(tile_width / scale_factor)  # use round?
-    
-
-
     
     real_scale_factor = int(math.pow(2,best_level_for_downsample-level))
-    #tile_height_scaled = round(tile_height / real_scale_factor)  # use round?
-    #tile_width_scaled = round(tile_width / real_scale_factor)  # use round?
     tile_height_scaled = util.adjust_level(tile_height, level, best_level_for_downsample)
     tile_width_scaled = util.adjust_level(tile_width, level, best_level_for_downsample)
 
@@ -1114,20 +1150,17 @@ def score_tiles(img_np:np.array,
     for roi in rois:
         # if roi level and tile extraction level differ, adjust roi dimensions to the tile level 
         # e.g. roi level is 0, tile level is 2 -> divide roi dimensions by 2^(2-0)
-        x_adjusted = util.adjust_level(value_to_adjust=roi.x_upper_left, from_level=roi.level, to_level=level)
-        y_adjusted = util.adjust_level(value_to_adjust=roi.y_upper_left, from_level=roi.level, to_level=level)
-        height_adjusted = util.adjust_level(value_to_adjust=roi.height, from_level=roi.level, to_level=level)
-        width_adjusted = util.adjust_level(value_to_adjust=roi.width, from_level=roi.level, to_level=level)
-        roi = RegionOfInterest(x_adjusted, y_adjusted, height_adjusted, width_adjusted, level)
-
-        x_scaled = util.adjust_level(value_to_adjust=roi.x_upper_left, from_level=roi.level, to_level=best_level_for_downsample)
-        y_scaled = util.adjust_level(value_to_adjust=roi.y_upper_left, from_level=roi.level, to_level=best_level_for_downsample)
-        height_scaled = util.adjust_level(value_to_adjust=roi.height, from_level=roi.level, to_level=best_level_for_downsample)
-        width_scaled = util.adjust_level(value_to_adjust=roi.width, from_level=roi.level, to_level=best_level_for_downsample)
-        roi_scaled = RegionOfInterest(x_scaled, y_scaled, height_scaled, width_scaled, best_level_for_downsample)
-
-
+        if roi.level != level:
+            roi.change_level_in_place(level)
+                
+        roi_scaled = roi.change_level_deep_copy(best_level_for_downsample)
+        print(roi)
+        print(roi_scaled)
+        print(tile_height_scaled)
+        print(tile_width_scaled)
+        
         tile_indices = get_tile_indices(roi_scaled.height, roi_scaled.width, tile_height_scaled, tile_width_scaled)
+        print(len(tile_indices))
         for t in tile_indices:
             count += 1  # tile_num
 
