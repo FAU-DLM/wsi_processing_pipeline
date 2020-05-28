@@ -1135,10 +1135,10 @@ def score_tiles(img_np:np.array,
             r_s, r_e, c_s, c_e, r, c = t
 
             #coordinates with respect to upper left point of wsi as (0,0)
-            r_s += roi_scaled.y_upper_left
-            r_e += roi_scaled.y_upper_left
-            c_s += roi_scaled.x_upper_left
-            c_e += roi_scaled.x_upper_left
+            r_s += int(roi_scaled.y_upper_left)
+            r_e += int(roi_scaled.y_upper_left)
+            c_s += int(roi_scaled.x_upper_left)
+            c_e += int(roi_scaled.x_upper_left)
 
 
             np_tile = img_np_filtered[r_s:r_e, c_s:c_e]
