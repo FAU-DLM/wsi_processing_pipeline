@@ -607,7 +607,6 @@ def tile_naming_function_default(wsi_or_roi_path:Union[pathlib.Path, str])-> str
 ###
 
 
-
 def ExtractTileFromWSI(path:Union[str, pathlib.Path], x:int, y:int, width:int, height:int, level:int)-> PIL.Image:
     """
     Args:
@@ -1122,7 +1121,7 @@ def score_tiles(img_np:np.array,
         y_scaled = util.adjust_level(value_to_adjust=roi.y_upper_left, from_level=roi.level, to_level=best_level_for_downsample)
         height_scaled = util.adjust_level(value_to_adjust=roi.height, from_level=roi.level, to_level=best_level_for_downsample)
         width_sclaed = util.adjust_level(value_to_adjust=roi.width, from_level=roi.level, to_level=best_level_for_downsample)
-        roi_scaled = RegionOfInterest(x_scaled, y_scaled, height_scaled, width_sclaed)
+        roi_scaled = RegionOfInterest(x_scaled, y_scaled, height_scaled, width_sclaed, best_level_for_downsample)
 
 
         tile_indices = get_tile_indices(roi_scaled.height, roi_scaled.width, tile_height_scaled, tile_width_scaled)
