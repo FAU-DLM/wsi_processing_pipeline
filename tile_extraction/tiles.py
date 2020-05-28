@@ -41,9 +41,8 @@ import pandas as pd
 import warnings
 from enum import Enum
 
-from wsi_processing_pipeline.tile_extraction import util, filter, slide, openslide_overwrite
-from wsi_processing_pipeline.tile_extraction.util import Time
-
+from tile_extraction import util, filter, slide, openslide_overwrite
+from tile_extraction.util import Time
 
 
 TISSUE_HIGH_THRESH = 80
@@ -59,30 +58,6 @@ class DatasetType(Enum):
     validation = 1
     test = 2
 
-
-class WsiInfo:
-    path:pathlib.Path = None
-    patient_id = None
-    case_id = None
-    slide_id = None
-    classification_labels = None
-    dataset_type = None
-    rois:List[RegionOfInterest] = None
-
-    def __init__(self, 
-                 path:Union[str,pathlib.Path], 
-                 patient_id:str, case_id:str, 
-                 slide_id:str, 
-                 classification_labels:List[str], 
-                 dataset_type:DatasetType, 
-                 rois:List[RegionOfInterest]):
-        self.path = pathlib.Path(path)
-        self.patient_id = patient_id
-        self.case_id = case_id
-        self.slide_id = slide_id
-        self.classification_labels = classification_labels
-        self.dataset_type = dataset_type
-        self.rois = rois
 
 class RegionOfInterest:
     """
@@ -109,6 +84,29 @@ class RegionOfInterest:
         self.width = width
         self.level = level
 
+class WsiInfo:
+    path:pathlib.Path = None
+    patient_id = None
+    case_id = None
+    slide_id = None
+    classification_labels = None
+    dataset_type = None
+    rois:List[RegionOfInterest] = None
+
+    def __init__(self, 
+                 path:Union[str,pathlib.Path], 
+                 patient_id:str, case_id:str, 
+                 slide_id:str, 
+                 classification_labels:List[str], 
+                 dataset_type:DatasetType, 
+                 rois:List[RegionOfInterest]):
+        self.path = pathlib.Path(path)
+        self.patient_id = patient_id
+        self.case_id = case_id
+        self.slide_id = slide_id
+        self.classification_labels = classification_labels
+        self.dataset_type = dataset_type
+        self.rois = rois
 
 
 class TileSummary:
@@ -174,6 +172,7 @@ class TileSummary:
 
         """
         Arguments:
+            level: whole-slide image's level, the tiles shall be extracted from
             orig_w, orig_h: original height and original width depend on the specified level. With each level, the dimensions half.
             scale_factor:  Downscaling is applied during tile calculation to speed up the process. The tiles in the end get extracted from the full resolution
                                  the full resolution depends on the level, the user specifies. The higher the level, the lower the resolution/magnification.
@@ -187,6 +186,8 @@ class TileSummary:
                                  downscaling is applied during tile calculation to speed up the process. The tile in the end get extracted from the full resolution
                                  The full resolution depends on the level, the user specifies. The higher the level, the lower the resolution/magnification.
                                  Therefore less downsampling needs to be applied during tile calculation, to achieve same speed up.
+
+            best_level_for_downsample: result of openslide.OpenSlide.get_best_level_for_downsample(scale_factor)
         """
 
         self.wsi_path = wsi_path
@@ -247,7 +248,7 @@ class TileSummary:
 
     def tiles_by_score(self):
         """
-        Retrieve the tiles ranked by score.
+        Retrieve the tiles ranked by score. If rois were specified, only tiles within those rois will be taken into account.
 
         Returns:
            List of the tiles ranked by score.
@@ -399,6 +400,7 @@ class Tile:
     slide_id = None
     classification_label:List = None
     dataset_type:DatasetType = None
+    roi:RegionOfInterest = None
                 
     def __init__(self, 
                  tile_summary, 
@@ -424,12 +426,21 @@ class Tile:
                  tile_naming_func, 
                  level,
                  best_level_for_downsample,
-                 real_scale_factor, 
+                 real_scale_factor,
+                 roi:RegionOfInterest,
                  patient_id = None, 
                  case_id = None, 
                  slide_id = None, 
                  classification_labels:List = None, 
                  dataset_type:DatasetType = None):
+        """
+        Arguments:
+            level: whole-slide image's level, the tile shall be extracted from
+            best_level_for_downsample: openslide.OpenSlide.get_best_level_for_downsample(scale_factor)
+            best_level_for_downsample: openslide.OpenSlide.get_best_level_for_downsample(scale_factor)
+        """
+
+
         self.tile_summary = tile_summary
         self.wsi_path = wsi_path
         self.tiles_folder_path = tiles_folder_path
@@ -453,6 +464,7 @@ class Tile:
         self.tile_naming_func = tile_naming_func
         self.level = level
         self.best_level_for_downsample = best_level_for_downsample
+        self.roi = roi
         self.real_scale_factor = real_scale_factor
         self.patient_id = patient_id
         self.case_id = case_id
@@ -838,7 +850,6 @@ def wsi_to_scaled_pil_image(wsi_filepath:pathlib.Path, scale_factor = 32, level 
     return img, large_w, large_h, new_w, new_h, best_level_for_downsample
 
 
-
 def create_tilesummary(wsiPath,
                         tilesFolderPath,
                         img_pil:PIL.Image.Image, 
@@ -854,12 +865,15 @@ def create_tilesummary(wsiPath,
                         tile_scoring_function, 
                         tile_naming_func, 
                         level:int, 
-                        best_level_for_downsample:int = 0, 
+                        best_level_for_downsample:int, 
                         wsi_info:WsiInfo = None)->TileSummary:
     """
   
     Args:
-
+        wsi_original_width: unscaled width with respect to the specified level
+        wsi_original_height: unscaled width with respect to the specified level
+        scale_factor: the scale_factor specified by the user
+        best_level_for_downsample: result of openslide.OpenSlide.get_best_level_for_downsample(scale_factor)
     """
     np_img = util.pil_to_np_rgb(img_pil)
     np_img_filtered = util.pil_to_np_rgb(img_pil_filtered)
@@ -1009,8 +1023,6 @@ def save_display_tile(tile, save, display):
   if display:
     tile_pil_img.show()
     
-
-
 def score_tiles(img_np:np.array, 
                 img_np_filtered:np.array, 
                 wsi_path:pathlib.Path,
@@ -1035,6 +1047,11 @@ def score_tiles(img_np:np.array,
     the specified height and width.
 
     Args:
+        wsi_original_width: unscaled width with respect to the specified level
+        wsi_original_height: unscaled width with respect to the specified level
+        scale_factor: the scale_factor specified by the user
+        best_level_for_downsample: result of openslide.OpenSlide.get_best_level_for_downsample(scale_factor) 
+
 
     Returns:
     TileSummary object which includes a list of Tile objects containing information about each tile.
@@ -1050,8 +1067,10 @@ def score_tiles(img_np:np.array,
 
     
     real_scale_factor = int(math.pow(2,best_level_for_downsample-level))
-    tile_height_scaled = round(tile_height / real_scale_factor)  # use round?
-    tile_width_scaled = round(tile_width / real_scale_factor)  # use round?
+    #tile_height_scaled = round(tile_height / real_scale_factor)  # use round?
+    #tile_width_scaled = round(tile_width / real_scale_factor)  # use round?
+    tile_height_scaled = util.adjust_level(tile_height, level, best_level_for_downsample)
+    tile_width_scaled = util.adjust_level(tile_width, level, best_level_for_downsample)
 
     num_row_tiles, num_col_tiles = get_num_tiles(wsi_scaled_height, 
                                                  wsi_scaled_width, 
@@ -1093,15 +1112,33 @@ def score_tiles(img_np:np.array,
     for roi in rois:
         # if roi level and tile extraction level differ, adjust roi dimensions to the tile level 
         # e.g. roi level is 0, tile level is 2 -> divide roi dimensions by 2^(2-0)
-        if(roi.level != level):
-            #TODO
+        x_adjusted = util.adjust_level(value_to_adjust=roi.x_upper_left, from_level=roi.level, to_level=level)
+        y_adjusted = util.adjust_level(value_to_adjust=roi.y_upper_left, from_level=roi.level, to_level=level)
+        height_adjusted = util.adjust_level(value_to_adjust=roi.height, from_level=roi.level, to_level=level)
+        width_adjusted = util.adjust_level(value_to_adjust=roi.width, from_level=roi.level, to_level=level)
+        roi = RegionOfInterest(x_adjusted, y_adjusted, height_adjusted, width_adjusted, level)
+
+        x_scaled = util.adjust_level(value_to_adjust=roi.x_upper_left, from_level=roi.level, to_level=best_level_for_downsample)
+        y_scaled = util.adjust_level(value_to_adjust=roi.y_upper_left, from_level=roi.level, to_level=best_level_for_downsample)
+        height_scaled = util.adjust_level(value_to_adjust=roi.height, from_level=roi.level, to_level=best_level_for_downsample)
+        width_sclaed = util.adjust_level(value_to_adjust=roi.width, from_level=roi.level, to_level=best_level_for_downsample)
+        roi_scaled = RegionOfInterest(x_scaled, y_scaled, height_scaled, width_sclaed)
 
 
-        #TODO (still original state)
-        tile_indices = get_tile_indices(wsi_scaled_height, wsi_scaled_width, tile_height_scaled, tile_width_scaled)
+        tile_indices = get_tile_indices(roi_scaled.height, roi_scaled.width, tile_height_scaled, tile_width_scaled)
         for t in tile_indices:
             count += 1  # tile_num
+
+            #coordinates with respect to upper left point of roi as (0,0)
             r_s, r_e, c_s, c_e, r, c = t
+
+            #coordinates with respect to upper left point of wsi as (0,0)
+            r_s += roi_scaled.y_upper_left
+            r_e += roi_scaled.y_upper_left
+            c_s += roi_scaled.x_upper_left
+            c_e += roi_scaled.x_upper_left
+
+
             np_tile = img_np_filtered[r_s:r_e, c_s:c_e]
             t_p = filter.tissue_percent(np_tile)
             amount = tissue_quantity(t_p)
@@ -1129,11 +1166,10 @@ def score_tiles(img_np:np.array,
 
             score, color_factor, s_and_v_factor, quantity_factor = score_tile(np_tile, t_p, r, c, tile_scoring_function)
 
-            np_tile #if small_tile_in_tile else None
         
             tile = Tile(tile_sum, wsi_path, tilesFolderPath, np_tile, count, r, c, r_s, r_e, c_s, c_e, o_r_s, o_r_e, o_c_s,
                         o_c_e, t_p, color_factor, s_and_v_factor, quantity_factor, score, tile_naming_func, level, 
-                        best_level_for_downsample, real_scale_factor)
+                        best_level_for_downsample, real_scale_factor, roi)
             tile_sum.tiles.append(tile)
 
 
