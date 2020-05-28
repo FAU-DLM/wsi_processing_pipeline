@@ -31,6 +31,24 @@ ADDITIONAL_NP_STATS = False
 
 
 
+
+def adjust_level(value_to_adjust:int, from_level:int, to_level:int)->int:
+    """
+    Arguments: 
+        value_to_adjust: pixel size that shall be adjusted
+        from_level: The whole-slide image level the <value_to_adjust> is currently in
+        to_level: The level to which the <value_to_adjust> shall be transformed to
+    Returns:
+        adjusted pixel size (rounded to int)
+    """
+    if(from_level < to_level):
+        return round(value_to_adjust/(2**(to_level-from_level)))
+    if(from_level > to_level):
+        return round(value_to_adjust*(2**(from_level-to_level)))
+    else:
+        return value_to_adjust
+
+
 def safe_dict_access(dict:Dict, key):
     """
     returns None if anything goes wrong at getting the value from the dict, else returns the value
