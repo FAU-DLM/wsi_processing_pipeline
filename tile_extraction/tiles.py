@@ -926,14 +926,17 @@ def get_tile_indices(rows, cols, row_tile_size, col_tile_size):
   Obtain a list of tile coordinates (starting row, ending row, starting column, ending column, row number, column number).
 
   Args:
-    rows: Number of rows.
-    cols: Number of columns.
-    row_tile_size: Number of pixels in a tile row.
-    col_tile_size: Number of pixels in a tile column.
+    rows: Number of rows. (height in pixels)
+    cols: Number of columns. (width in pixels)
+    row_tile_size: Number of pixels in a tile row. (tile height in pixels)
+    col_tile_size: Number of pixels in a tile column. (tile width in pixels)
 
   Returns:
     List of tuples representing tile coordinates consisting of starting row, ending row,
     starting column, ending column, row number, column number.
+
+    row numbers from 1 to rows/row_tile_size (rounded up)
+    column numbers from 1 to cols/col_tile_size (rounded up)
   """
   indices = list()
   num_row_tiles, num_col_tiles = get_num_tiles(rows, cols, row_tile_size, col_tile_size)
@@ -1120,8 +1123,8 @@ def score_tiles(img_np:np.array,
         x_scaled = util.adjust_level(value_to_adjust=roi.x_upper_left, from_level=roi.level, to_level=best_level_for_downsample)
         y_scaled = util.adjust_level(value_to_adjust=roi.y_upper_left, from_level=roi.level, to_level=best_level_for_downsample)
         height_scaled = util.adjust_level(value_to_adjust=roi.height, from_level=roi.level, to_level=best_level_for_downsample)
-        width_sclaed = util.adjust_level(value_to_adjust=roi.width, from_level=roi.level, to_level=best_level_for_downsample)
-        roi_scaled = RegionOfInterest(x_scaled, y_scaled, height_scaled, width_sclaed, best_level_for_downsample)
+        width_scaled = util.adjust_level(value_to_adjust=roi.width, from_level=roi.level, to_level=best_level_for_downsample)
+        roi_scaled = RegionOfInterest(x_scaled, y_scaled, height_scaled, width_scaled, best_level_for_downsample)
 
 
         tile_indices = get_tile_indices(roi_scaled.height, roi_scaled.width, tile_height_scaled, tile_width_scaled)
