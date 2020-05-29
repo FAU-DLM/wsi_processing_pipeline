@@ -42,8 +42,10 @@ import warnings
 from enum import Enum
 import copy
 
+import sys
+sys.path.append("../")
 from tile_extraction import util, filter, slide, openslide_overwrite
-from tile_extraction.util import Time
+from tile_extraction.util import *
 
 
 TISSUE_HIGH_THRESH = 80
@@ -407,7 +409,39 @@ class TileSummary:
         util.show_np_with_bboxes(wsi_np, boxes, figsize)
         
         
-
+    def show_wsi_with_rois(self, 
+                           figsize:Tuple[int] = (10,10),
+                           scale_factor:int = 32):
+        """    
+        Loads a whole slide image, scales it down, converts it into a numpy array and displays it with a grid overlay for all rois
+        specified in self.wsi_info
+        Arguments:
+            figsize: Size of the plotted matplotlib figure containing the image.
+            scale_factor: The larger, the faster this method works, but the plotted image has less resolution.
+            tilesummary: a TileSummary object of one wsi
+            wsi_path: Path to a whole-slide image
+            df_tiles: A pandas dataframe from e.g. "tiles.WsiOrROIToTilesMultithreaded" with spacial information about all tiles     
+        """
+        ## TODO
+        pass
+        
+        
+#        wsi_pil, large_w, large_h, new_w, new_h, best_level_for_downsample = wsi_to_scaled_pil_image(self.wsi_path,
+#                                                                                                        scale_factor=self.scale_factor,
+#                                                                                                        level=0)
+#        wsi_np = util.pil_to_np_rgb(wsi_pil)
+#        boxes =[]
+#        
+#        print(len(self.top_tiles()))
+#        
+#        for tile in self.top_tiles():
+#            x = util.adjust_level(tile.get_x(), tile.level, best_level_for_downsample)
+#            y = util.adjust_level(tile.get_y(), tile.level, best_level_for_downsample)
+#            width = util.adjust_level(tile.get_width(), tile.level, best_level_for_downsample)
+#            height = util.adjust_level(tile.get_height(), tile.level, best_level_for_downsample)
+#            box = np.array([x,y,width,height])
+#            boxes.append(box)
+#        util.show_np_with_bboxes(wsi_np, boxes, figsize)
         
       
             

@@ -29,8 +29,10 @@ import skimage.future as sk_future
 import skimage.morphology as sk_morphology
 import skimage.segmentation as sk_segmentation
 
-from wsi_processing_pipeline.tile_extraction import util, tiles, slide, openslide_overwrite
-from wsi_processing_pipeline.tile_extraction.util import Time
+import sys
+sys.path.append("../")
+from tile_extraction import util, tiles, slide, openslide_overwrite
+from tile_extraction.util import *
 
 
 

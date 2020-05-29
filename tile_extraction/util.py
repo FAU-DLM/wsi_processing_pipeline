@@ -25,14 +25,19 @@ import matplotlib
 import matplotlib.pyplot as plt
 import matplotlib.image as mpimg
 import fastai
+
+import sys
+sys.path.append("../")
+import tile_extraction
 from tile_extraction import tiles
+from tiles import *
 
 # If True, display additional NumPy array stats (min, max, mean, is_binary).
 ADDITIONAL_NP_STATS = False
 
 
 def show_wsi_with_rois(wsi_path:pathlib.Path, 
-                       rois:List[tiles.RegionOfInterest], 
+                       rois:List[RegionOfInterest], 
                        figsize:Tuple[int] = (10,10), 
                        scale_factor:int = 32):
         """    

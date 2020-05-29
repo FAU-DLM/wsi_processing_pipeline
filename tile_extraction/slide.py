@@ -31,9 +31,10 @@ import sys
 
 from typing import List, Callable, Union
 
-sys.path.append("../../")
-from wsi_processing_pipeline.tile_extraction import util, filter, tiles, openslide_overwrite
-from wsi_processing_pipeline.tile_extraction.util import Time
+import sys
+sys.path.append("../")
+from tile_extraction import util, filter, tiles, openslide_overwrite
+from tile_extraction.util import *
 
 
 def open_slide(path:Union[str, pathlib.Path]):
