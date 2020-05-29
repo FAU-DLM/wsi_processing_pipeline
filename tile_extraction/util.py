@@ -58,8 +58,8 @@ def show_wsi_with_rois(wsi_path:pathlib.Path,
         wsi_np = pil_to_np_rgb(wsi_pil)
         boxes =[]
         for roi in rois:
-            roi.change_level(new_level=best_level_for_downsample)
-            box = np.array([roi.x_upper_left, roi.y_upper_left, roi.width, roi.height])
+            roi_adj = roi.change_level_deep_copy(new_level=best_level_for_downsample)
+            box = np.array([roi_adj.x_upper_left, roi_adj.y_upper_left, roi_adj.width, roi_adj.height])
             boxes.append(box)
         show_np_with_bboxes(wsi_np, boxes, figsize)
         
