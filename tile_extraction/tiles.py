@@ -169,12 +169,8 @@ class TileSummary:
     level = None
     best_level_for_downsample = None
     real_scale_factor = None
-    
-    patient_id = None
-    case_id = None
-    slide_id = None
-    classification_labels = None
-    dataset_type = None
+        
+    wsi_info = None
 
     count = 0
     high = 0
@@ -201,11 +197,7 @@ class TileSummary:
                  level, 
                  best_level_for_downsample,
                  real_scale_factor, 
-                 patient_id = None, 
-                 case_id = None, 
-                 slide_id = None, 
-                 classification_labels = None, 
-                 dataset_type:DatasetType = None):
+                 wsi_info:WsiInfo=None):
 
         """
         Arguments:
@@ -245,11 +237,10 @@ class TileSummary:
         self.level = level
         self.best_level_for_downsample = best_level_for_downsample
         self.real_scale_factor = real_scale_factor
-        self.patient_id = patient_id
-        self.case_id = case_id
-        self.slide_id = slide_id
-        self.classification_labels = classification_labels
-        self.dataset_type = dataset_type
+        
+        if wsi_info != None:
+            self.set_wsi_info(wsi_info)
+        
         self.tiles = []
 
     #def __str__(self):
@@ -332,6 +323,7 @@ class TileSummary:
         """
          convenience function to set all parameters in WsiInfo at once and also for all tiles
         """
+        self.wsi_info = wsi_info
         self.set_patient_id(wsi_info.patient_id)
         self.set_case_id(wsi_info.case_id)
         self.set_slide_id(wsi_info.slide_id)
@@ -342,7 +334,7 @@ class TileSummary:
         """
         sets patient_id for all its tiles as well
         """
-        self.patient_id = patient_id
+        self.wsi_info.patient_id = patient_id
         for t in self.tiles:
             t.set_patient_id(patient_id)
 
@@ -350,7 +342,7 @@ class TileSummary:
         """
         sets case_id for all its tiles as well
         """
-        self.case_id = case_id
+        self.wsi_info.case_id = case_id
         for t in self.tiles:
             t.set_case_id(case_id)
 
@@ -358,7 +350,7 @@ class TileSummary:
         """
         sets slide_id for all its tiles as well
         """
-        self.slide_id = slide_id
+        self.wsi_info.slide_id = slide_id
         for t in self.tiles:
             t.set_slide_id(slide_id)
 
@@ -366,7 +358,7 @@ class TileSummary:
         """
         sets classification_labels for all its tiles as well
         """
-        self.classification_labels = classification_labels
+        self.wsi_info.classification_labels = classification_labels
         for t in self.tiles:
             t.set_classification_labels(classification_labels)
 
@@ -374,7 +366,7 @@ class TileSummary:
         """
         sets dataset_type for all its tiles as well
         """
-        self.dataset_type = dataset_type
+        self.wsi_info.dataset_type = dataset_type
         for t in self.tiles:
             t.set_dataset_type(dataset_type)      
 
@@ -396,8 +388,6 @@ class TileSummary:
                                                                                                         level=0)
         wsi_np = util.pil_to_np_rgb(wsi_pil)
         boxes =[]
-        
-        print(len(self.top_tiles()))
         
         for tile in self.top_tiles():
             x = util.adjust_level(tile.get_x(), tile.level, best_level_for_downsample)
@@ -974,11 +964,8 @@ def create_tilesummary(wsiPath,
                            tile_naming_func, 
                            level, 
                            best_level_for_downsample, 
-                           wsi_info.rois)
-
-    if wsi_info is not None:
-        tile_sum.set_wsi_info(wsi_info)
-
+                           wsi_info)
+    
     return tile_sum
 
 
@@ -1122,7 +1109,7 @@ def score_tiles(img_np:np.array,
                 tile_naming_func, 
                 level:int, 
                 best_level_for_downsample:int, 
-                rois:List[RegionOfInterest]) -> TileSummary:
+                wsi_info:WsiInfo=None) -> TileSummary:
     """
     Scores all tiles for a slide and returns the results in a TileSummary object.
     If regions of interests are specified, only tiles within those regions will be scored to reduce processing time.
@@ -1166,7 +1153,8 @@ def score_tiles(img_np:np.array,
                              tile_score_thresh=tile_score_thresh,
                              level=level,
                              best_level_for_downsample=best_level_for_downsample,
-                             real_scale_factor=real_scale_factor)   
+                             real_scale_factor=real_scale_factor, 
+                             wsi_info)   
     
 
 
@@ -1176,6 +1164,8 @@ def score_tiles(img_np:np.array,
     low = 0
     none = 0
 
+    rois = wsi_info.rois
+    
     #if no rois are specified, just create one "fake" roi, that is as big as the whole image
     if(rois is None or len(rois) == 0):
         rois = [RegionOfInterest(0,0, wsi_original_height, wsi_original_width, level)]
@@ -1188,13 +1178,8 @@ def score_tiles(img_np:np.array,
             roi.change_level_in_place(level)
                 
         roi_scaled = roi.change_level_deep_copy(best_level_for_downsample)
-        print(roi)
-        print(roi_scaled)
-        print(tile_height_scaled)
-        print(tile_width_scaled)
         
         tile_indices = get_tile_indices(roi_scaled.height, roi_scaled.width, tile_height_scaled, tile_width_scaled)
-        print(len(tile_indices))
         for t in tile_indices:
             count += 1  # tile_num
 
