@@ -157,6 +157,10 @@ class TileSummary:
     orig_h = None #full height in pixels of the wsi on the specified level
     orig_tile_w = None 
     orig_tile_h = None
+    
+    minimal_acceptable_tile_width = None #between 0.0 and 1.0; percentage of orig_w ;tiles at the edges will not have full width
+    minimal_acceptable_tile_height = None #between 0.0 and 1.0; percentage of orig_h ;tiles at the edges will not have full height
+    
     scale_factor = None #for faster processing the wsi is scaled down internally, the resulting tiles are on maximum resolution
                                 #depending on the specified level
     scaled_w = None 
@@ -187,7 +191,9 @@ class TileSummary:
                  orig_w, 
                  orig_h, 
                  orig_tile_w, 
-                 orig_tile_h, 
+                 orig_tile_h,
+                 minimal_acceptable_tile_width,
+                 minimal_acceptable_tile_height,
                  scale_factor, 
                  scaled_w, 
                  scaled_h, 
@@ -206,17 +212,28 @@ class TileSummary:
         Arguments:
             level: whole-slide image's level, the tiles shall be extracted from
             orig_w, orig_h: original height and original width depend on the specified level. With each level, the dimensions half.
-            scale_factor:  Downscaling is applied during tile calculation to speed up the process. The tiles in the end get extracted from the full resolution
-                                 the full resolution depends on the level, the user specifies. The higher the level, the lower the resolution/magnification.
+            
+            minimal_acceptable_tile_width: factor between 0.0 and 1.0. percentage of orig_w ;affects tiles at the edges, which cannot 
+                                            have full width
+            minimal_acceptable_tile_height: factor between 0.0 and 1.0. percentage of orig_h ;affects tiles at the edges, which 
+                                            cannot have full height                                                               
+                                                                       
+            scale_factor:  Downscaling is applied during tile calculation to speed up the process. The tiles in the end get extracted 
+                            from the full resolution. the full resolution depends on the level, the user specifies. The higher the 
+                            level, the lower the resolution/magnification.
                                  Therefore less downsampling needs to be applied during tile calculation, to achieve same speed up.
-                                 So e.g. the wsi has dimensions of 10000x10000 pixels on level 0. A scale_factor of 32 is speficied. Then calculations will be applied on
+                                 So e.g. the wsi has dimensions of 10000x10000 pixels on level 0. A scale_factor of 32 is speficied. 
+                                 Then calculations will be applied on
                                  a downscaled version of the wsi with dimensions on the level log2(32)
 
-            real_scale_factor: if a scale_factor of e.g. 32 is specified and a level of 0, from which the tiles shall be extracted, scale_factor==real_scale_factor.
+            real_scale_factor: if a scale_factor of e.g. 32 is specified and a level of 0, from which the tiles shall be extracted, 
+                                scale_factor==real_scale_factor.
                                  For each level, the wsi dimensions half.
                                  That means for a scale_factor of 32 and level 1 the real_scale_factor would be only 16.
-                                 downscaling is applied during tile calculation to speed up the process. The tile in the end get extracted from the full resolution
-                                 The full resolution depends on the level, the user specifies. The higher the level, the lower the resolution/magnification.
+                                 downscaling is applied during tile calculation to speed up the process. The tile in the end get 
+                                 extracted from the full resolution
+                                 The full resolution depends on the level, the user specifies. The higher the level, the lower the 
+                                 resolution/magnification.
                                  Therefore less downsampling needs to be applied during tile calculation, to achieve same speed up.
 
             best_level_for_downsample: result of openslide.OpenSlide.get_best_level_for_downsample(scale_factor)
@@ -227,7 +244,9 @@ class TileSummary:
         self.orig_w = orig_w
         self.orig_h = orig_h
         self.orig_tile_w = orig_tile_w
-        self.orig_tile_h = orig_tile_h
+        self.orig_tile_h = orig_tile_h       
+        self.minimal_acceptable_tile_width = minimal_acceptable_tile_width
+        self.minimal_acceptable_tile_height = minimal_acceptable_tile_height        
         self.scale_factor = scale_factor
         self.scaled_w = scaled_w
         self.scaled_h = scaled_h
@@ -306,7 +325,8 @@ class TileSummary:
     
     def top_tiles(self, verbose=False):
         """
-        Retrieve only the tiles that pass scoring.
+        Retrieve only the tiles that pass scoring and their height and width are greater than 
+        minimal_acceptable_tile_height/minimal_acceptable_tile_width.
 
         Returns:
            List of the top-scoring tiles.
@@ -321,10 +341,8 @@ class TileSummary:
     def check_tile(self, tile):
         width = tile.o_c_e - tile.o_c_s
         height = tile.o_r_e - tile.o_r_s
-        return tile.score > self.tile_score_thresh and width >= 0.7*self.orig_tile_w and height >= 0.7*self.orig_tile_h
+        return tile.score > self.tile_score_thresh and width >= self.minimal_acceptable_tile_width*self.orig_tile_w and height >= self.minimal_acceptable_tile_height*self.orig_tile_h
         
-
-
     def set_wsi_info(self, wsi_info:WsiInfo):
         """
          convenience function to set all parameters in WsiInfo at once and also for all tiles
@@ -704,6 +722,8 @@ def WsiOrROIToTiles(wsi_path:pathlib.Path,
                tiles_folder_path:pathlib.Path,
                tile_height:int, 
                tile_width:int,
+               minimal_acceptable_tile_height:float = 0.7,
+               minimal_acceptable_tile_width:float = 0.7,
                tile_naming_func:Callable = tile_naming_function_default,
                tile_score_thresh:float = 0.55,
                tile_scoring_function = scoring_function_1,
@@ -721,6 +741,11 @@ def WsiOrROIToTiles(wsi_path:pathlib.Path,
     tiles_folder_path: The folder where the extracted tiles will be saved (only needed if save_tiles=True).
     tile_heigth: Number of pixels tile height.
     tile_width: Number of pixels tile width.
+    minimal_acceptable_tile_height: factor between 0.0 and 1.0. percentage of orig_h ;affects tiles at the edges, which 
+                                    cannot have full height 
+    minimal_acceptable_tile_width: factor between 0.0 and 1.0. percentage of orig_w ;affects tiles at the edges, which cannot 
+                                    have full width
+    
     tile_score_thresh: Tiles with a score higher than the number from "tileScoringFunction" will be saved.
     tile_scoring_function: Function to score one tile to determine if it should be saved or not.
     tile_naming_func: 99% of the time there should be no necessity to change this.
@@ -728,11 +753,13 @@ def WsiOrROIToTiles(wsi_path:pathlib.Path,
                         This string will then be used as part of the name for the tile (plus some specific tile information and
                         the file format .png, whick is generated by this library).
                         
-    level: Level of the WSI you want to extract the tiles from. 0 means highest resolution. For not wsi formats like .png leave it at 0.
+    level: Level of the WSI you want to extract the tiles from. 0 means highest resolution. For not wsi formats like .png leave it at 
+            0.
     save_tiles: if True the tiles will be extracted and saved to {tilesFolderPath}
     return_as_tilesummary_object: return_as_tilesummary_object: Set this to true, if you 
                                     want the TileSummary object and not a pandas dataframe.
-    wsi_info: not mandatory; a WsiInfo object. If you specify this, its information will also be set for all Tile objects in the resulting TileSummary object.
+    wsi_info: not mandatory; a WsiInfo object. If you specify this, its information will also be set for all Tile objects in the 
+                resulting TileSummary object.
     Return:
     if return_as_tilesummary_object == True:
        a TileSummary object will be returned
@@ -745,7 +772,7 @@ def WsiOrROIToTiles(wsi_path:pathlib.Path,
     
     if verbose:
         print(f"Starting to process {str(wsi_path)}")
-    
+
     scale_factor = 32
 
     ### against DecompressionBombWarning
@@ -756,24 +783,26 @@ def WsiOrROIToTiles(wsi_path:pathlib.Path,
 
                 
     img_pil_filtered = filter.filter_img(img_pil)
-    tilesummary = create_tilesummary(wsi_path,
-                                     tiles_folder_path, 
-                                     img_pil, 
-                                     img_pil_filtered, 
-                                     original_width, 
-                                     original_height, 
-                                     scaled_width, 
-                                     scaled_height, 
-                                     tile_height, 
-                                     tile_width, 
-                                     scale_factor,
-                                     tile_score_thresh,
-                                     tile_scoring_function,
-                                     tile_naming_func, 
-                                     level, 
-                                     best_level_for_downsample, 
-                                     wsi_info, 
-                                     verbose)
+    tilesummary = create_tilesummary(wsiPath=wsi_path,
+                                     tilesFolderPath=tiles_folder_path, 
+                                     img_pil=img_pil, 
+                                     img_pil_filtered=img_pil_filtered, 
+                                     wsi_original_width=original_width, 
+                                     wsi_original_height=original_height, 
+                                     wsi_scaled_width=scaled_width, 
+                                     wsi_scaled_height=scaled_height, 
+                                     tile_height=tile_height, 
+                                     tile_width=tile_width,
+                                     minimal_acceptable_tile_height=minimal_acceptable_tile_height,
+                                     minimal_acceptable_tile_width=minimal_acceptable_tile_width,
+                                     scale_factor=scale_factor,
+                                     tile_score_thresh=tile_score_thresh,
+                                     tile_scoring_function=tile_scoring_function,
+                                     tile_naming_func=tile_naming_func, 
+                                     level=level, 
+                                     best_level_for_downsample=best_level_for_downsample, 
+                                     wsi_info=wsi_info, 
+                                     verbose=verbose)
     
     if(save_tiles):
         for tile in tilesummary.top_tiles(verbose):
@@ -807,6 +836,8 @@ def WsiOrROIToTilesMultithreaded(wsi_paths:List[pathlib.Path],
                              tiles_folder_path:pathlib.Path,
                              tile_height:int, 
                              tile_width:int,
+                             minimal_acceptable_tile_height:float = 0.7,
+                             minimal_acceptable_tile_width:float = 0.7,
                              tile_naming_func:Callable = tile_naming_function_default,
                              tile_score_thresh:float = 0.55,
                              tile_scoring_function = scoring_function_1,  
@@ -823,16 +854,22 @@ def WsiOrROIToTilesMultithreaded(wsi_paths:List[pathlib.Path],
     tiles_folder_path: The folder where the extracted tiles will be saved (only needed if save_tiles=True).
     tile_heigth: Number of pixels tile height.
     tile_width: Number of pixels tile width.
+    minimal_acceptable_tile_height: factor between 0.0 and 1.0. percentage of orig_h ;affects tiles at the edges, which 
+                                    cannot have full height 
+    minimal_acceptable_tile_width: factor between 0.0 and 1.0. percentage of orig_w ;affects tiles at the edges, which cannot 
+                                    have full width
     tile_score_thresh: Tiles with a score higher than the number from "tileScoringFunction" will be saved.
     tile_scoring_function: Function to score one tile to determine if it should be saved or not.
     tile_naming_func: 99% of the time there should be no necessity to change this.
                         A function, that takes a pathlib.Path to the WSI or ROI as an argument and returns a string.
                         This string will then be used as part of the name for the tile (plus some specific tile information and
                         the file format .png, whick is generated by this library).
-    level: Level of the WSI you want to extract the tile from. 0 means highest resolution. For not wsi formats like .png leave it at 0.
+    level: Level of the WSI you want to extract the tile from. 0 means highest resolution. For not wsi formats like .png leave it at 
+            0.
     save_tiles: if True the tiles will be extracted and saved to {tilesFolderPath}
     return_as_tilesummary_object: Set this to true, if you want the TileSummary object and not a pandas dataframe.
-    wsi_path_to_wsi_info: a dict with key: wsi_path and value WsiInfo object. If you set this, the info will we passed down to all tiles in the tilesummary result
+    wsi_path_to_wsi_info: a dict with key: wsi_path and value WsiInfo object. If you set this, the info will we passed down to all 
+                            tiles in the tilesummary result
     Return:
     if return_as_tilesummary_object == True:
        a List of TileSummary objects will be returned
@@ -849,18 +886,20 @@ def WsiOrROIToTilesMultithreaded(wsi_paths:List[pathlib.Path],
     with multiprocessing.Pool() as pool:
         for p in wsi_paths:
             pool.apply_async(WsiOrROIToTiles, 
-                             args=(p, 
-                                   tiles_folder_path,
-                                   tile_height, 
-                                   tile_width,
-                                   tile_naming_func,
-                                   tile_score_thresh, 
-                                   tile_scoring_function, 
-                                   level, 
-                                   save_tiles, 
-                                   return_as_tilesummary_object, 
-                                   util.safe_dict_access(wsi_path_to_wsi_info, p), 
-                                   verbose), 
+                             kwds={"wsi_path":p, 
+                                   "tiles_folder_path":tiles_folder_path,
+                                   "tile_height":tile_height, 
+                                   "tile_width":tile_width,
+                                   "minimal_acceptable_tile_height":minimal_acceptable_tile_height,
+                                   "minimal_acceptable_tile_width":minimal_acceptable_tile_width,
+                                   "tile_naming_func":tile_naming_func,
+                                   "tile_score_thresh":tile_score_thresh, 
+                                   "tile_scoring_function":tile_scoring_function, 
+                                   "level":level, 
+                                   "save_tiles":save_tiles, 
+                                   "return_as_tilesummary_object":return_as_tilesummary_object, 
+                                   "wsi_info":util.safe_dict_access(wsi_path_to_wsi_info, p), 
+                                   "verbose":verbose}, 
                                    callback=update)
             
                 
@@ -919,7 +958,9 @@ def create_tilesummary(wsiPath,
                         wsi_scaled_width:int, 
                         wsi_scaled_height:int, 
                         tile_height:int, 
-                        tile_width:int, 
+                        tile_width:int,
+                        minimal_acceptable_tile_height:float,
+                        minimal_acceptable_tile_width:float,
                         scale_factor:int,
                         tile_score_thresh:float,
                         tile_scoring_function, 
@@ -936,27 +977,30 @@ def create_tilesummary(wsiPath,
         scale_factor: the scale_factor specified by the user
         best_level_for_downsample: result of openslide.OpenSlide.get_best_level_for_downsample(scale_factor)
     """
+
     np_img = util.pil_to_np_rgb(img_pil)
     np_img_filtered = util.pil_to_np_rgb(img_pil_filtered)
 
-    tile_sum = score_tiles(np_img, 
-                           np_img_filtered, 
-                           wsiPath,
-                           tilesFolderPath,
-                           tile_height,
-                           tile_width,
-                           scale_factor, 
-                           wsi_original_width, 
-                           wsi_original_height, 
-                           wsi_scaled_width, 
-                           wsi_scaled_height,
-                           tile_score_thresh,
-                           tile_scoring_function, 
-                           tile_naming_func, 
-                           level, 
-                           best_level_for_downsample, 
-                           wsi_info, 
-                           verbose)    
+    tile_sum = score_tiles(img_np=np_img, 
+                           img_np_filtered=np_img_filtered, 
+                           wsi_path=wsiPath,
+                           tilesFolderPath=tilesFolderPath,
+                           tile_height=tile_height,
+                           tile_width=tile_width,
+                           minimal_acceptable_tile_height=minimal_acceptable_tile_height,
+                           minimal_acceptable_tile_width=minimal_acceptable_tile_width,
+                           scale_factor=scale_factor, 
+                           wsi_original_width=wsi_original_width, 
+                           wsi_original_height=wsi_original_height, 
+                           wsi_scaled_width=wsi_scaled_width, 
+                           wsi_scaled_height=wsi_scaled_height,
+                           tile_score_thresh=tile_score_thresh,
+                           tile_scoring_function=tile_scoring_function, 
+                           tile_naming_func=tile_naming_func, 
+                           level=level, 
+                           best_level_for_downsample=best_level_for_downsample, 
+                           wsi_info=wsi_info, 
+                           verbose=verbose)    
     return tile_sum
 
 
@@ -1080,13 +1124,16 @@ def save_display_tile(tile, save, display):
 
   if display:
     tile_pil_img.show()
+
     
 def score_tiles(img_np:np.array, 
                 img_np_filtered:np.array, 
                 wsi_path:pathlib.Path,
                 tilesFolderPath:pathlib.Path,
                 tile_height:int, 
-                tile_width:int, 
+                tile_width:int,
+                minimal_acceptable_tile_height:float,
+                minimal_acceptable_tile_width:float,
                 scale_factor:int, 
                 wsi_original_width:int, 
                 wsi_original_height:int, 
@@ -1114,8 +1161,7 @@ def score_tiles(img_np:np.array,
 
     Returns:
     TileSummary object which includes a list of Tile objects containing information about each tile.
-    """
-    
+    """ 
     real_scale_factor = int(math.pow(2,best_level_for_downsample-level))
     tile_height_scaled = util.adjust_level(tile_height, level, best_level_for_downsample)
     tile_width_scaled = util.adjust_level(tile_width, level, best_level_for_downsample)
@@ -1131,6 +1177,8 @@ def score_tiles(img_np:np.array,
                              orig_h=wsi_original_height,
                              orig_tile_w=tile_width,
                              orig_tile_h=tile_height,
+                             minimal_acceptable_tile_height = minimal_acceptable_tile_height,
+                             minimal_acceptable_tile_width = minimal_acceptable_tile_width,
                              scale_factor=scale_factor,
                              scaled_w=wsi_scaled_width,
                              scaled_h=wsi_scaled_height,
