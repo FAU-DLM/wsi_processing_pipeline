@@ -471,7 +471,7 @@ class Tile:
     patient_id = None
     case_id = None
     slide_id = None
-    classification_label:List = None
+    classification_labels:List = None
     dataset_type:DatasetType = None
     roi:RegionOfInterest = None
                 
@@ -573,11 +573,11 @@ class Tile:
     def display_with_histograms(self):
         display_tile(self, rgb_histograms=True, hsv_histograms=True)
 
-    def get_np_scaled_tile(self):
-        return self.np_scaled_tile
+    def get_np_scaled_filtered_tile(self):
+        return self.np_scaled_filtered_tile
 
-    def get_pil_scaled_tile(self):
-        return util.np_to_pil(self.np_scaled_tile)
+    def get_pil_scaled_filtered_tile(self):
+        return util.np_to_pil(self.np_scaled_filtered_tile)
     
     def get_width(self):
         return self.o_c_e - self.o_c_s
