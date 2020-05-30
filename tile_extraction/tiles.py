@@ -171,6 +171,8 @@ class TileSummary:
     real_scale_factor = None
         
     wsi_info = None
+    
+    tiles = None
 
     count = 0
     high = 0
@@ -238,10 +240,12 @@ class TileSummary:
         self.best_level_for_downsample = best_level_for_downsample
         self.real_scale_factor = real_scale_factor
         
+        self.tiles = []
+        
         if wsi_info != None:
             self.set_wsi_info(wsi_info)
         
-        self.tiles = []
+        
 
     #def __str__(self):
     #    return summary_title(self) + "\n" + summary_stats(self)
@@ -378,10 +382,7 @@ class TileSummary:
         that passed scoring to visualize which tiles e.g. "tiles.WsiOrROIToTilesMultithreaded" calculated as worthy to keep.
         Arguments:
             figsize: Size of the plotted matplotlib figure containing the image.
-            scale_factor: The larger, the faster this method works, but the plotted image has less resolution.
-            tilesummary: a TileSummary object of one wsi
-            wsi_path: Path to a whole-slide image
-            df_tiles: A pandas dataframe from e.g. "tiles.WsiOrROIToTilesMultithreaded" with spacial information about all tiles     
+            scale_factor: The larger, the faster this method works, but the plotted image has less resolution.    
         """
         wsi_pil, large_w, large_h, new_w, new_h, best_level_for_downsample = wsi_to_scaled_pil_image(self.wsi_path,
                                                                                                         scale_factor=self.scale_factor,
@@ -404,39 +405,14 @@ class TileSummary:
                            scale_factor:int = 32):
         """    
         Loads a whole slide image, scales it down, converts it into a numpy array and displays it with a grid overlay for all rois
-        specified in self.wsi_info
+        specified in self.wsi_info.rois
         Arguments:
             figsize: Size of the plotted matplotlib figure containing the image.
-            scale_factor: The larger, the faster this method works, but the plotted image has less resolution.
-            tilesummary: a TileSummary object of one wsi
-            wsi_path: Path to a whole-slide image
-            df_tiles: A pandas dataframe from e.g. "tiles.WsiOrROIToTilesMultithreaded" with spacial information about all tiles     
+            scale_factor: The larger, the faster this method works, but the plotted image has less resolution.    
         """
-        ## TODO
-        pass
-        
-        
-#        wsi_pil, large_w, large_h, new_w, new_h, best_level_for_downsample = wsi_to_scaled_pil_image(self.wsi_path,
-#                                                                                                        scale_factor=self.scale_factor,
-#                                                                                                        level=0)
-#        wsi_np = util.pil_to_np_rgb(wsi_pil)
-#        boxes =[]
-#        
-#        print(len(self.top_tiles()))
-#        
-#        for tile in self.top_tiles():
-#            x = util.adjust_level(tile.get_x(), tile.level, best_level_for_downsample)
-#            y = util.adjust_level(tile.get_y(), tile.level, best_level_for_downsample)
-#            width = util.adjust_level(tile.get_width(), tile.level, best_level_for_downsample)
-#            height = util.adjust_level(tile.get_height(), tile.level, best_level_for_downsample)
-#            box = np.array([x,y,width,height])
-#            boxes.append(box)
-#        util.show_np_with_bboxes(wsi_np, boxes, figsize)
+        util.show_wsi_with_rois(self.wsi_path, self.wsi_info.rois)
         
       
-            
-
-
 class Tile:
     """
     Class for information about a tile.
@@ -727,13 +703,11 @@ def WsiOrROIToTiles(wsi_path:pathlib.Path,
                return_as_tilesummary_object = False, 
                wsi_info:WsiInfo = None)-> Union[TileSummary, pandas.DataFrame]:
     """
-    There is currently a bug with levels above 0. Tiles do not get scored correctly and empty tiles will pass scoring.
-    
-    Calculates tile coordinates and returns them in a pandas dataframe. If save_tiles == True the tiles will also be extracted
+    Calculates tile coordinates and returns a TileSummary object. If save_tiles == True the tiles will also be extracted
     and saved from the WSI or ROI (ROI is assumed to be a "normal" image format like .png).
     
     Arguments:
-    wsi_path: Path to a WSI or ROI
+    wsi_path: Path to a WSI or ROI(=already extracted part of a wsi in e.g. .png format)
     tiles_folder_path: The folder where the extracted tiles will be saved (only needed if save_tiles=True).
     tile_heigth: Number of pixels tile height.
     tile_width: Number of pixels tile width.
@@ -964,8 +938,7 @@ def create_tilesummary(wsiPath,
                            tile_naming_func, 
                            level, 
                            best_level_for_downsample, 
-                           wsi_info)
-    
+                           wsi_info)    
     return tile_sum
 
 
@@ -1017,8 +990,6 @@ def get_tile_indices(rows, cols, row_tile_size, col_tile_size):
       indices.append((start_r, end_r, start_c, end_c, r + 1, c + 1))
   return indices
 
-
-
 def tile_to_pil_tile(tile:Tile):
       """
       Convert tile information into the corresponding tile as a PIL image read from the whole-slide image file.
@@ -1067,7 +1038,6 @@ def get_tile_image_path(tile:Tile):
       return os.path.join(tile.tiles_folder_path, 
                           tile.tile_naming_func(tile.wsi_path) + "-" + 'tile' + "-r%d-c%d-x%d-y%d-w%d-h%d" % (
                              t.r, t.c, t.o_c_s, t.o_r_s, t.o_c_e - t.o_c_s, t.o_r_e - t.o_r_s) + "." + 'png') 
-
 
 
 def save_display_tile(tile, save, display):
@@ -1154,7 +1124,7 @@ def score_tiles(img_np:np.array,
                              level=level,
                              best_level_for_downsample=best_level_for_downsample,
                              real_scale_factor=real_scale_factor, 
-                             wsi_info)   
+                             wsi_info=wsi_info)   
     
 
 
@@ -1163,8 +1133,8 @@ def score_tiles(img_np:np.array,
     medium = 0
     low = 0
     none = 0
-
-    rois = wsi_info.rois
+    
+    rois = wsi_info.rois if wsi_info != None else None
     
     #if no rois are specified, just create one "fake" roi, that is as big as the whole image
     if(rois is None or len(rois) == 0):
@@ -1219,11 +1189,12 @@ def score_tiles(img_np:np.array,
                 o_r_e -= 1
 
             score, color_factor, s_and_v_factor, quantity_factor = score_tile(np_tile, t_p, r, c, tile_scoring_function)
-
-        
+       
             tile = Tile(tile_sum, wsi_path, tilesFolderPath, np_tile, count, r, c, r_s, r_e, c_s, c_e, o_r_s, o_r_e, o_c_s,
                         o_c_e, t_p, color_factor, s_and_v_factor, quantity_factor, score, tile_naming_func, level, 
                         best_level_for_downsample, real_scale_factor, roi)
+            if wsi_info != None:
+                tile.set_wsi_info(wsi_info)              
             tile_sum.tiles.append(tile)
 
 
