@@ -152,13 +152,14 @@ class TileSummary:
     """
 
     wsi_path = None
-    tiles_folder_path = None
-    orig_w = None
-    orig_h = None
-    orig_tile_w = None
+    tiles_folder_path = None    
+    orig_w = None #full width in pixels of the wsi on the specified level
+    orig_h = None #full height in pixels of the wsi on the specified level
+    orig_tile_w = None 
     orig_tile_h = None
-    scale_factor = None
-    scaled_w = None
+    scale_factor = None #for faster processing the wsi is scaled down internally, the resulting tiles are on maximum resolution
+                                #depending on the specified level
+    scaled_w = None 
     scaled_h = None
     scaled_tile_w = None
     scaled_tile_h = None
@@ -422,17 +423,24 @@ class Tile:
     tiles_folder_path = None
     np_scaled_tile = None
     tile_num = None
-    r = None
-    c = None
-    r_s = None
-    r_e = None
-    c_s = None
-    c_e = None
-    o_r_s = None
-    o_r_e = None
-    o_c_s = None
-    o_c_e = None
-    t_p = None
+    r = None # (=row) e.g. the wsi has a height of 1024 pixel and one tile has a height of 256 pixels, r can be in range [1,4] (ends 
+             # included); if rois are specified, it's the row number inside the roi; so tiles from different rois can have the same
+             # r and c value but with respect to different rois
+    c = None # (=column) like r but according to width
+    
+    r_s = None #(=row_start)pixel value on y-axis of the SCALED down wsi; always with respect to the wsi nevertheless rois are 
+                # specified
+    r_e = None # (=row_end)
+    c_s = None # (=column_start) like r_s but x-axis
+    c_e = None #(=column_end)
+    
+    o_r_s = None #(=original_row_start)pixel value on y-axis of the UNscaled wsi on the specified level; always with respect to the 
+                    # wsi nevertheless rois are specified
+    o_r_e = None #(=original_row_end)
+    o_c_s = None #(=original_column_start)
+    o_c_e = None #(=original_column_end)
+    
+    t_p = None #tissue percentage
     color_factor = None
     s_and_v_factor = None
     quantity_factor = None
