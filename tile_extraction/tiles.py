@@ -440,7 +440,7 @@ class Tile:
     tile_summary = None
     wsi_path = None
     tiles_folder_path = None
-    np_scaled_tile = None
+    np_scaled_filtered_tile = None
     tile_num = None
     r = None # (=row) e.g. the wsi has a height of 1024 pixel and one tile has a height of 256 pixels, r can be in range [1,4] (ends 
              # included); if rois are specified, it's the row number inside the roi; so tiles from different rois can have the same
@@ -479,7 +479,7 @@ class Tile:
                  tile_summary, 
                  wsi_path,  
                  tiles_folder_path, 
-                 np_scaled_tile, 
+                 np_scaled_filtered_tile, 
                  tile_num, 
                  r, 
                  c, 
@@ -517,7 +517,7 @@ class Tile:
         self.tile_summary = tile_summary
         self.wsi_path = wsi_path
         self.tiles_folder_path = tiles_folder_path
-        self.np_scaled_tile = np_scaled_tile
+        self.np_scaled_filtered_tile = np_scaled_filtered_tile
         self.tile_num = tile_num
         self.r = r
         self.c = c
@@ -1230,8 +1230,8 @@ def score_tiles(img_np:np.array,
             c_e += roi_scaled.x_upper_left
 
 
-            np_tile = img_np_filtered[int(r_s):int(r_e), int(c_s):int(c_e)]
-            t_p = filter.tissue_percent(np_tile)
+            np_scaled_filtered_tile = img_np_filtered[int(r_s):int(r_e), int(c_s):int(c_e)]
+            t_p = filter.tissue_percent(np_scaled_filtered_tile)
             amount = tissue_quantity(t_p)
             if amount == TissueQuantity.HIGH:
                 high += 1
@@ -1255,10 +1255,11 @@ def score_tiles(img_np:np.array,
             if (o_r_e - o_r_s) > tile_height:
                 o_r_e -= 1
 
-            score, color_factor, s_and_v_factor, quantity_factor = score_tile(np_tile, t_p, r, c, tile_scoring_function)
+            score, color_factor, s_and_v_factor, quantity_factor = score_tile(np_scaled_filtered_tile, t_p, r, c, 
+                                                                              tile_scoring_function)
        
-            tile = Tile(tile_sum, wsi_path, tilesFolderPath, np_tile, count, r, c, r_s, r_e, c_s, c_e, o_r_s, o_r_e, o_c_s,
-                        o_c_e, t_p, color_factor, s_and_v_factor, quantity_factor, score, tile_naming_func, level, 
+            tile = Tile(tile_sum, wsi_path, tilesFolderPath, np_scaled_filtered_tile, count, r, c, r_s, r_e, c_s, c_e, o_r_s, o_r_e, 
+                        o_c_s, o_c_e, t_p, color_factor, s_and_v_factor, quantity_factor, score, tile_naming_func, level, 
                         best_level_for_downsample, real_scale_factor, roi)
             if wsi_info != None:
                 tile.set_wsi_info(wsi_info)              
