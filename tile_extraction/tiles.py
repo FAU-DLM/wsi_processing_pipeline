@@ -322,6 +322,7 @@ class TileSummary:
         width = tile.o_c_e - tile.o_c_s
         height = tile.o_r_e - tile.o_r_s
         return tile.score > self.tile_score_thresh and width >= 0.7*self.orig_tile_w and height >= 0.7*self.orig_tile_h
+        
 
 
     def set_wsi_info(self, wsi_info:WsiInfo):
@@ -709,7 +710,8 @@ def WsiOrROIToTiles(wsi_path:pathlib.Path,
                level = 0, 
                save_tiles:bool = False, 
                return_as_tilesummary_object = False, 
-               wsi_info:WsiInfo = None)-> Union[TileSummary, pandas.DataFrame]:
+               wsi_info:WsiInfo = None, 
+               verbose=False)-> Union[TileSummary, pandas.DataFrame]:
     """
     Calculates tile coordinates and returns a TileSummary object. If save_tiles == True the tiles will also be extracted
     and saved from the WSI or ROI (ROI is assumed to be a "normal" image format like .png).
@@ -740,8 +742,9 @@ def WsiOrROIToTiles(wsi_path:pathlib.Path,
 
     if(tiles_folder_path is None and save_tiles == True):
         raise ValueError("You should specify a {tiles_folder_path}")
-        
-    print(f"Starting to process {str(wsi_path)}")
+    
+    if verbose:
+        print(f"Starting to process {str(wsi_path)}")
     
     scale_factor = 32
 
@@ -769,18 +772,21 @@ def WsiOrROIToTiles(wsi_path:pathlib.Path,
                                      tile_naming_func, 
                                      level, 
                                      best_level_for_downsample, 
-                                     wsi_info)
+                                     wsi_info, 
+                                     verbose)
     
     if(save_tiles):
-        for tile in tilesummary.top_tiles():
+        for tile in tilesummary.top_tiles(verbose):
             tile.save_tile()
             
     if return_as_tilesummary_object:
+        if verbose:
+            tilesummary.top_tiles(verbose)
         return tilesummary
     
     else:    
         rows_list = []
-        for tile in tilesummary.top_tiles():                                      
+        for tile in tilesummary.top_tiles(verbose):                                      
             row = {'tile_name':tile.get_name(),
                 'wsi_path':tile.wsi_path,
                 'level':tile.level,
@@ -807,7 +813,8 @@ def WsiOrROIToTilesMultithreaded(wsi_paths:List[pathlib.Path],
                              level = 0, 
                              save_tiles:bool = False, 
                              return_as_tilesummary_object = False, 
-                             wsi_path_to_wsi_info:Dict = None)-> Union[List[TileSummary], pandas.DataFrame]:
+                             wsi_path_to_wsi_info:Dict = None, 
+                             verbose=False)-> Union[List[TileSummary], pandas.DataFrame]:
     """
     The method WsiOrROIToTiles for a list of WSIs/ROIs in parallel on multiple threads.
     
@@ -852,7 +859,8 @@ def WsiOrROIToTilesMultithreaded(wsi_paths:List[pathlib.Path],
                                    level, 
                                    save_tiles, 
                                    return_as_tilesummary_object, 
-                                   util.safe_dict_access(wsi_path_to_wsi_info, p)), 
+                                   util.safe_dict_access(wsi_path_to_wsi_info, p), 
+                                   verbose), 
                                    callback=update)
             
                 
@@ -918,7 +926,8 @@ def create_tilesummary(wsiPath,
                         tile_naming_func, 
                         level:int, 
                         best_level_for_downsample:int, 
-                        wsi_info:WsiInfo = None)->TileSummary:
+                        wsi_info:WsiInfo = None, 
+                        verbose=False)->TileSummary:
     """
   
     Args:
@@ -946,7 +955,8 @@ def create_tilesummary(wsiPath,
                            tile_naming_func, 
                            level, 
                            best_level_for_downsample, 
-                           wsi_info)    
+                           wsi_info, 
+                           verbose)    
     return tile_sum
 
 
@@ -1087,7 +1097,8 @@ def score_tiles(img_np:np.array,
                 tile_naming_func, 
                 level:int, 
                 best_level_for_downsample:int, 
-                wsi_info:WsiInfo=None) -> TileSummary:
+                wsi_info:WsiInfo=None, 
+                verbose=False) -> TileSummary:
     """
     Scores all tiles for a slide and returns the results in a TileSummary object.
     If regions of interests are specified, only tiles within those regions will be scored to reduce processing time.
