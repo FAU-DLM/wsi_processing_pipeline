@@ -71,21 +71,25 @@ class RegionOfInterest:
     height:int = None
     width:int = None
     level:int = None
+    name:str = None
 
-    def __init__(self, x_upper_left:int, y_upper_left:int, height:int, width:int, level:int):
+    def __init__(self, x_upper_left:int, y_upper_left:int, height:int, width:int, level:int, name:str = None):
         """
             Arguments:
             x_upper_left: x coordinate of roi's upper left point
             y_upper_left: y coordinate of roi's upper left point
             height: roi's height in pixel
             width: roi's width in pixel
-            level: level of the whole-slide image. 0 means highest resolution. Leave it 0 if you use e.g. png files instead of a whole-slide image format like .ndpi
+            level: level of the whole-slide image. 0 means highest resolution. Leave it 0 if you use e.g. png files instead of a 
+                    whole-slide image format like .ndpi
+            name: a name for the roi
         """
         self.x_upper_left = x_upper_left
         self.y_upper_left = y_upper_left
         self.height = height
         self.width = width
         self.level = level
+        self.name = name
         
     def __repr__(self):
         return f"x: {self.x_upper_left}, y: {self.y_upper_left}, height: {self.height}, width: {self.width}, level: {self.level}"
