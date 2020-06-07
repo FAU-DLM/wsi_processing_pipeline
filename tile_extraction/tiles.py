@@ -481,7 +481,7 @@ class Tile:
                 
     def __init__(self, 
                  tile_summary, 
-                 wsi_path,  
+                 wsi_path,
                  tiles_folder_path, 
                  np_scaled_filtered_tile, 
                  tile_num, 
@@ -520,6 +520,7 @@ class Tile:
 
         self.tile_summary = tile_summary
         self.wsi_path = wsi_path
+        self.roi = roi
         self.tiles_folder_path = tiles_folder_path
         self.np_scaled_filtered_tile = np_scaled_filtered_tile
         self.tile_num = tile_num
@@ -1262,8 +1263,8 @@ def score_tiles(img_np:np.array,
             score, color_factor, s_and_v_factor, quantity_factor = score_tile(np_scaled_filtered_tile, t_p, r, c, 
                                                                               tile_scoring_function)
        
-            tile = Tile(tile_sum, wsi_path, tilesFolderPath, np_scaled_filtered_tile, count, r, c, r_s, r_e, c_s, c_e, o_r_s, o_r_e, 
-                        o_c_s, o_c_e, t_p, color_factor, s_and_v_factor, quantity_factor, score, tile_naming_func, level, 
+            tile = Tile(tile_sum, wsi_path, tilesFolderPath, np_scaled_filtered_tile, count, r, c, r_s, r_e, c_s, c_e, o_r_s, 
+                        o_r_e, o_c_s, o_c_e, t_p, color_factor, s_and_v_factor, quantity_factor, score, tile_naming_func, level, 
                         best_level_for_downsample, real_scale_factor, roi)
             if wsi_info != None:
                 tile.set_wsi_info(wsi_info)              
