@@ -1,5 +1,6 @@
 import pathlib
 from pathlib import Path
+import fastcore
 
 def presetter(variables={}, cls=None):
         ''' This is just to preset variables in the functions within the class; no checks are made here'''
