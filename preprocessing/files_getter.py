@@ -6,7 +6,7 @@ import scandir
 from typing import Dict
 from wsi_processing_pipeline.preprocessing.checks import presetter, precheck
 
-class FilesGetter(object):
+class FilesGetter():
         
     def get_dirs_and_files(self,
                            path=None, 
