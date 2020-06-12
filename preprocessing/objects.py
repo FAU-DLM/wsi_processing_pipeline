@@ -9,8 +9,7 @@ class NamedObject():
                  case_id=None, 
                  slide_id=None,
                  classification_label=None,
-                 dataset_type:DatasetType=None
-                 ):
+                 dataset_type:DatasetType=None):
         
         self.path=path
         self.patient_id=patient_id
