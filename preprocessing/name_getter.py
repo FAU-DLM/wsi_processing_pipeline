@@ -1,3 +1,11 @@
+import pathlib
+import fastai2
+from fastai2.vision.all import *
+from tqdm import tqdm
+import scandir
+from typing import Dict
+from wsi_processing_pipeline.preprocessing.checks import presetter, precheck
+
 class NameGetter(object):
     '''This class provides utility functions around the issue of naming files and directories from objects 
     found in any path'''
@@ -13,7 +21,7 @@ class NameGetter(object):
                  path_to_patient_mapping=None,
                  patient_to_path_mapping=None,
                  names=None,
-                 labels=None, 
+                 classification_labels=None, 
                  keys=None):      
            
                
@@ -27,7 +35,7 @@ class NameGetter(object):
         self.path_to_patient_mapping= path_to_patient_mapping
         self.patient_to_path_mapping= patient_to_path_mapping
         self.names=names
-        self.labels=labels 
+        self.classification_labels=classification_labels 
         self.keys=keys
         
     def set_patient_id(self, path=None, patient_ids=None, key='path'):        
@@ -61,7 +69,7 @@ class NameGetter(object):
                 return self.path_to_patient_mapping[path]
             
        
-    def create_named_object(self, path, patient_id, case_id, slide_id, classification_label):
+    def create_named_object(self, path, patient_id, case_id, slide_id, classification_labels):
         if not isinstance(path, list):
             path=[path]
         if not isinstance(patient_id, list):
@@ -70,14 +78,14 @@ class NameGetter(object):
             case_id=[case_id]    
         if not isinstance(slide_id, list):
             slide_id=[slide_id] 
-        if not isinstance(classification_label, list):
-            classification_label=[classification_label]     
+        if not isinstance(classification_labels, list):
+            classification_labels=[classification_labels]     
         
         named_objects=[NamedObject().create(path=p,
                  patient_id=p_id,
                  case_id=c_id,
                  slide_id=s_id,
-                 classification_label=c_l)for p, p_id, c_id, s_id, c_l in tqdm(zip(path,patient_id,case_id,slide_id, classification_label))]
+                 classification_labels=c_l)for p, p_id, c_id, s_id, c_l in tqdm(zip(path,patient_id,case_id,slide_id, classification_labels))]
         
         return named_objects
     
@@ -86,7 +94,7 @@ class NameGetter(object):
                                       patient_id_getter=None,
                                       case_id_getter=None,
                                       slide_id_getter=None,
-                                      classification_label_getter=None):
+                                      classification_labels_getter=None):
         presetter(variables={'path':path                             
                              },
                              cls=self
@@ -96,14 +104,14 @@ class NameGetter(object):
                            },
                      cls=self)
         
-        paths, patient_id, case_id, slide_id, classification_label =self.get_ids_from_path(path=self.path,
+        paths, patient_id, case_id, slide_id, classification_labels =self.get_ids_from_path(path=self.path,
                                                             patient_id_getter=patient_id_getter,
                                                             case_id_getter=case_id_getter,
                                                             slide_id_getter=slide_id_getter,
-                                                            classification_label_getter=classification_label_getter)
+                                                            classification_labels_getter=classification_labels_getter)
        
            
-        named_objects=self.create_named_object(paths, patient_id, case_id, slide_id, classification_label)
+        named_objects=self.create_named_object(paths, patient_id, case_id, slide_id, classification_labels)
         
         return named_objects            
     
@@ -113,7 +121,7 @@ class NameGetter(object):
                           patient_id_getter=None,
                           case_id_getter=None,
                           slide_id_getter=None,
-                          classification_label_getter=None):
+                          classification_labels_getter=None):
         
         presetter(variables={'path':path                             
                              },
@@ -137,17 +145,17 @@ class NameGetter(object):
             slide_id = [None] * len(path)  
         if slide_id_getter:            
             slide_id=slide_id_getter(self.path)
-        if not classification_label_getter:            
-            classification_label = [None] * len(path) 
-        if classification_label_getter:            
-            classification_label = classification_label_getter(self.path)              
+        if not classification_labels_getter:            
+            classification_labels = [None] * len(path) 
+        if classification_labels_getter:            
+            classification_labels = classification_labels_getter(self.path)              
         
-        return self.path, patient_id, case_id, slide_id, classification_label
+        return self.path, patient_id, case_id, slide_id, classification_labels
     
     
     def create_named_object_from_df(self, df):
-        paths, patient_id, case_id, slide_id, classification_label = self.get_ids_from_df(df)            
-        named_objects=self.create_named_object(paths, patient_id, case_id, slide_id, classification_label)        
+        paths, patient_id, case_id, slide_id, classification_labels = self.get_ids_from_df(df)            
+        named_objects=self.create_named_object(paths, patient_id, case_id, slide_id, classification_labels)        
         return named_objects   
         
     def get_ids_from_df(self,df=None):
@@ -155,9 +163,9 @@ class NameGetter(object):
         patient_id = df.case.patient_id.tolist()
         case_id = df.case_id.tolist()
         slide_id = df.slide_id.tolist()
-        classification_label = df.classification_label.tolist()
+        classification_labels = df.classification_labels.tolist()
         #if not any(isinstance(el, NoneType) for el in case_id) and not any(isinstance(el, NoneType) for el in slide_id):
-        return path, patient_id, case_id, slide_id, classification_label
+        return path, patient_id, case_id, slide_id, classification_labels
         #elif any(isinstance(el, NoneType) for el in case_id) and not any(isinstance(el, NoneType) for el in slide_id):    
         #    return path, patient_id, None, slide_id    
      
@@ -402,24 +410,24 @@ class NameGetter(object):
         return self.path          
     
     def num2lbs(self, 
-                labels=None, 
+                classification_labels=None, 
                 keys=None):
-        presetter(variables={'labels':labels, 
+        presetter(variables={'classification_labels':classification_labels, 
                              'keys':keys,                               
                              },
                              cls=self
                              )
         precheck(types=['str-or-int'],                       
-                      str_or_int={'labels':self.labels,
+                      str_or_int={'classification_labels':self.classification_labels,
                                       'keys':self.keys                                                                          
                                       },
                      cls=self) 
         
         if self.keys==[None]:
-            num2lbs = { i : self.labels[i] for i in range(0, len(self.labels) ) }
+            num2lbs = { i : self.classification_labels[i] for i in range(0, len(self.classification_labels) ) }
             
         elif self.keys!=[]:
-            zipbObj = zip( self.keys, self.labels)
+            zipbObj = zip( self.keys, self.classification_labels)
         # Create a dictionary from zip object
             num2lbs = dict(zipbObj)
         return num2lbs
@@ -429,14 +437,14 @@ class NameGetter(object):
         
     def label_func(self,
                    names=None,
-                   labels=None, 
+                   classification_labels=None, 
                    keys=None, 
                    return_list=False, 
                    return_name=False,                                     
                    match=False,
                    multicategory=False):
         
-        presetter(variables={'labels':labels, 
+        presetter(variables={'classification_labels':classification_labels, 
                              'keys':keys,
                              'names':names,
                              },
@@ -445,7 +453,7 @@ class NameGetter(object):
                  
         
         precheck(types=['str-or-int', 'bool'],                     
-                      str_or_int={'labels':self.labels,
+                      str_or_int={'classification_labels':self.classification_labels,
                                    'keys':self.keys,                                      
                                       },
                      bools={'return_list':return_list,
@@ -465,19 +473,19 @@ class NameGetter(object):
                     
                     if return_list:
                         if return_name:
-                            res=[[name] if name in self.labels else [NoneType] for name in names  ]
+                            res=[[name] if name in self.classification_labels else [NoneType] for name in names  ]
                         else:
-                            res=[[self.lbs2num()[name]] if name in self.labels else [NoneType] for name in names ]
+                            res=[[self.lbs2num()[name]] if name in self.classification_labels else [NoneType] for name in names ]
                     else:
                         if return_name: 
-                            res=[name if name in self.labels else NoneType for name in names ]
+                            res=[name if name in self.classification_labels else NoneType for name in names ]
                         else:
-                            res=[self.lbs2num()[name] if name in self.labels else NoneType for name in names ]     
+                            res=[self.lbs2num()[name] if name in self.classification_labels else NoneType for name in names ]     
 
             elif any(isinstance(el, list) for el in names):
                     raise NotImplementedError
             else:
                     raise AssertionError            
                 
-            self.data_labels=res
-            return res
+            
+            return res 
