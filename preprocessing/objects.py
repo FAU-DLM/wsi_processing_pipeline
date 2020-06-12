@@ -1,4 +1,8 @@
-class NamedObject(object):    
+from wsi_processing_pipeline.tile_extraction.tiles import DatasetType
+import sklearn
+from enum import Enum
+
+class NamedObject():    
     def __init__(self,                 
                  path=None,
                  patient_id=None, 
@@ -50,7 +54,7 @@ class NamedObject(object):
             }, index=[0])
         return df
 
-class ObjectManager(object):
+class ObjectManager():
     def __init__(self, 
                  objects:list = None,
                  splitter:sklearn.model_selection.train_test_split=None,
