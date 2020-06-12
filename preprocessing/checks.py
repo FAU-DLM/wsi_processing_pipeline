@@ -1,3 +1,6 @@
+import pathlib
+from pathlib import Path
+
 def presetter(variables={}, cls=None):
         ''' This is just to preset variables in the functions within the class; no checks are made here'''
         if cls is None:raise ValueError
@@ -61,7 +64,7 @@ def precheck(**kwargs):
                 
         if 'string' in kwargs['types']:             
             for key, value in kwargs['string'].items(): 
-                if isinstance(value,NoneType):
+                if value is None:
                     if 'cls' in kwargs['types']:
                         setattr(kwargs['cls'], key, [value])
                     else:    
@@ -82,7 +85,7 @@ def precheck(**kwargs):
                 elif isinstance(value, list) or isinstance(value,fastcore.foundation.L):                   
                           
                     ls=[]
-                    if any(isinstance(el, NoneType) for el in value):
+                    if any(el is None for el in value):
                         for parts in value:
                             ls.append(parts)
                     
@@ -104,7 +107,7 @@ def precheck(**kwargs):
                 
         if 'integer' in kwargs['types']:             
             for key, value in kwargs['integer'].items():
-                if isinstance(value,NoneType):
+                if value is None:
                     if 'cls' in kwargs['types']:
                         setattr(kwargs['cls'], key, [value])
                     else:    
@@ -124,7 +127,7 @@ def precheck(**kwargs):
                 elif isinstance(value, list) or isinstance(value,fastcore.foundation.L):                   
                           
                     ls=[]
-                    if any(isinstance(el, NoneType) for el in value):
+                    if any(el is None for el in value):
                         for parts in value:
                             ls.append(parts)
                     
@@ -145,7 +148,7 @@ def precheck(**kwargs):
                         
         if 'str-or-int' in kwargs['types']:             
             for key, value in kwargs['str_or_int'].items():
-                if isinstance(value,NoneType):
+                if value is None:
                     if 'cls' in kwargs['types']:
                         setattr(kwargs['cls'], key, [value])
                     else:    
@@ -163,7 +166,7 @@ def precheck(**kwargs):
                         raise ValueError(f'Please specify the parameter {key} as a string/integer or as a list of strings/integers!')                           
                 elif isinstance(value, list) or isinstance(value,fastcore.foundation.L):
                     ls=[]
-                    if any(isinstance(el, NoneType) for el in value):
+                    if any(el is None for el in value):
                         for parts in value:
                             ls.append(parts)
                     
@@ -186,4 +189,4 @@ def precheck(**kwargs):
                 if not isinstance(value, bool):
                     raise ValueError(f'Please specify the parameter {key} as type "bool"; "True" or "False"') 
         
-        return results
+        return results    
