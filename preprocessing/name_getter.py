@@ -1,28 +1,40 @@
+from typing import Dict, Union, List, Callable
+
 import pathlib
 import fastai2
 from fastai2.vision.all import *
 from tqdm import tqdm
 import scandir
-from typing import Dict
-from wsi_processing_pipeline.preprocessing.checks import presetter, precheck
+import fastcore
 
-class NameGetter(object):
+from wsi_processing_pipeline.preprocessing.checks import presetter, precheck
+from wsi_processing_pipeline.preprocessing.objects import NamedObject
+
+
+
+class NameGetter():
     '''This class provides utility functions around the issue of naming files and directories from objects 
     found in any path'''
-    
-    
+        
     def __init__(self,
-                 path=None, 
+                 path:Union[pathlib.Path, str]=None, 
                  path_parts=None, 
                  n_split_returns=None, 
                  splitter=None, 
                  joiner=None, 
                  rm_correctors=None, 
-                 path_to_patient_mapping=None,
-                 patient_to_path_mapping=None,
+                 path_to_patient_mapping:Dict=None,
+                 patient_to_path_mapping:Dict=None,
                  names=None,
                  classification_labels=None, 
-                 keys=None):      
+                 keys=None,
+                 func_path_to_patient_id:Callable=None,
+                 func_path_to_case_id:Callable=None, 
+                 func_path_to_slide_id:Callable=None):
+        """
+            Arguments:
+                func_path_to_classification_labels: 
+        """
            
                
          
@@ -37,6 +49,10 @@ class NameGetter(object):
         self.names=names
         self.classification_labels=classification_labels 
         self.keys=keys
+        self.func_path_to_patient_id = func_path_to_patient_id
+        self.func_path_to_case_id = func_path_to_case_id
+        self.func_path_to_slide_id = func_path_to_slide_id
+
         
     def set_patient_id(self, path=None, patient_ids=None, key='path'):        
         if path==None:
@@ -182,14 +198,14 @@ class NameGetter(object):
                            regex=None,                           
                            match=False):          
         '''Function that takes         
-        "path": pathlib or string object or as list
-        "path_parts: integer or as alist of integers defining parts of splitted path"
+        "path": pathlib or string object or a list
+        "path_parts: integer or a list of integers defining parts of split path"
         "n_split_returns: Number of splitted parts to return of the modified path defined as integer or list of integers
         "splitter" and "joiner" strings for splitting and joining the path_parts
         "unique": boolean for getting modified processed paths as set or pure list: may contain duplicate entries
         "rm_correctors" string or list of strings to strip of off the modified processed path adjusted with the parameter
         "remove:"boolean whether to just strip the rm_corrector off or to leave out the complete path_part containing the rm_corrector
-        "regex": is a regular expressions pattern used with fast.ais class RegexLabeller--> this overwrites the other methods!!
+        "regex": is a regular expressions pattern used with fastai's class RegexLabeller--> this overwrites the other methods!!
                 additionally ajustable with 
         "match": boolean whether re.match or re.search is used within the RegexLabeller  
         
@@ -239,7 +255,7 @@ class NameGetter(object):
         
         if isinstance(path, list)  or isinstance(path,fastcore.foundation.L):
            
-            return_path=self.get_names_from_paths(paths=self.path, 
+            return self.get_names_from_paths(paths=self.path, 
                                       path_parts=self.path_parts, 
                                       splitter=self.splitter, 
                                       joiner=self.joiner, 
@@ -247,15 +263,23 @@ class NameGetter(object):
                                       unique=unique,
                                       rm_correctors=self.rm_correctors,
                                       regex=regex,
-                                      keep_split=keep_split
-                                                 )            
+                                      keep_split=keep_split)            
             
-        else: 
-            
+        else:            
             if regex:                 
                 f= RegexLabeller(regex, match=match)
-                return_path = f(str(self.path)) 
-                
+                return f(str(self.path)) 
+            
+            elif self.func_path_to_patient_id is not None:
+                return self.func_path_to_patient_id(path)
+ 
+            elif self.func_path_to_case_id is not None:
+                return self.func_path_to_case_id(path)
+
+            elif self.func_path_to_slide_id is not None:
+                return self.func_path_to_slide_id(path)
+            
+            
             else:               
                 try: 
                     
@@ -274,11 +298,13 @@ class NameGetter(object):
                 except:
                     raise IndexError('You may want to use the "get_path_parts_and_indices" function  \n'
                               'to precheck your path and to get the parameters "path_parts" splitter", \n'
-                               '"joiner" and "n_split_returns" right!')                    
+                               '"joiner" and "n_split_returns" right!')
+                    
+            return return_path
                     
             
           
-        return return_path
+        
     
     def rm_corrector(self, parts_to_check, keep_split=False):
         
