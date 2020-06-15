@@ -1,6 +1,10 @@
+import wsi_processing_pipeline
+from wsi_processing_pipeline.tile_extraction import tiles
 from wsi_processing_pipeline.tile_extraction.tiles import DatasetType
 import sklearn
 from enum import Enum
+import typing
+from typing import List
 
 class NamedObject():    
     def __init__(self,                 
@@ -78,26 +82,30 @@ class ObjectManager():
         self.classification_label=[items.classification_label for items in self.objects]
         self.dataset_type=[items.dataset_type for items in self.objects]
         self.is_valid=[items.is_valid for items in self.objects]    
-    
+ 
+
     def convert_to_wsi_or_roi_object(self,
                                      save_tiles=False, 
-                                     is_wsi=True, 
                                      tile_score_thresh=0.55,
                                      return_as_tilesummary_object=True,
                                      tile_height=256,
                                      tile_width=256,
                                      tiles_folder_path=None,
-                                     tile_naming_func=None    ):           
-        
+                                     tile_naming_func=None):           
+        """
+            Convenvience function that will deal with the process of tile extraction for you.
+            Arguments:
+                see wsi_processing_pipeline.tile_extraction.tiles.WsiOrRoiToTiles
+        """
        
         
         wsi_path_to_wsi_info=create_WsiInfo(path=self.path,
-                       patient_id=self.patient_id,
-                   case_id=self.case_id, 
-                   slide_id=self.slide_id,
-                   classification_labels=self.classification_label,
-                   dataset_type=self.dataset_type
-                      )
+                                               patient_id=self.patient_id,
+                                               case_id=self.case_id, 
+                                               slide_id=self.slide_id,
+                                               classification_labels=self.classification_label,
+                                               dataset_type=self.dataset_type)
+        
         tilesummaries=tiles.WsiOrROIToTilesMultithreaded(
                       wsi_paths=self.path, 
                       tiles_folder_path=tiles_folder_path, 
@@ -105,10 +113,20 @@ class ObjectManager():
                       tile_width=tile_width, 
                       tile_naming_func=tile_naming_func,
                       save_tiles=save_tiles, 
-                      is_wsi=is_wsi,
                       tile_score_thresh = tile_score_thresh, 
                       return_as_tilesummary_object=return_as_tilesummary_object,
-                      wsi_path_to_wsi_info=wsi_path_to_wsi_info)  
+                      wsi_path_to_wsi_info=wsi_path_to_wsi_info) 
+        
+        convert_to_wsi_or_roi_object_by_tilesummary(tilesummaries=tilesummaries)
+        
+        
+    def convert_to_wsi_or_roi_object_by_tilesummary(self, 
+                                                    tilesummaries:List[wsi_processing_pipeline.tile_extraction.tiles.TileSummary]):
+        
+        """
+        If you prefer to create TileSummary objects yourself. (see wsi_processing_pipeline.tile_extraction example.ipynb)                                           
+        """
+        
         self.objects=sorted(self.objects, key=lambda x: x.path, reverse=True)
         tilesummaries=sorted(tilesummaries, key=lambda x: x.wsi_path, reverse=True)
         lst=[]
@@ -223,21 +241,23 @@ def create_WsiInfo(path:list,
                    dataset_type:list):
     
     wsi_path_to_wsi_info={}
-    for pat,pat_id,cas_id,slid_id,cl_lab,dat_typ in zip(path,
+    for path,pat_id,case_id,slide_id,cls_lab,dat_typ in zip(path,
                                                         patient_id, 
                                                         case_id, 
                                                         slide_id,
                                                         classification_labels,
                                                         dataset_type):
                         
-        wsiinfo=tiles.WsiInfo(patient_id=pat_id,
-                                                 case_id= cas_id,
-                                                 slide_id=slid_id,
-                                                 classification_labels= cl_lab,
-                                                 dataset_type=dat_typ)        
+        wsi_info=tiles.WsiInfo(path = path, 
+                               patient_id=pat_id,
+                               case_id= case_id,
+                               slide_id=slide_id,
+                               classification_labels= cls_lab,
+                               dataset_type=dat_typ, 
+                               rois = None)        
         
             
-        wsi_path_to_wsi_info[pat]=wsiinfo
+        wsi_path_to_wsi_info[path]=wsi_info
         
     return  wsi_path_to_wsi_info   
         
@@ -268,7 +288,6 @@ class WsiOrRoiObject(NamedObject):
         
     def process(self,
                 save_tiles=False, 
-                is_wsi=True, 
                 tile_score_thresh=0.55,
                 return_as_tilesummary_object=True,
                 tile_height=256,
@@ -291,7 +310,6 @@ class WsiOrRoiObject(NamedObject):
                       tile_width=tile_width, 
                       tile_naming_func=tile_naming_func,
                       save_tiles=save_tiles, 
-                      is_wsi=is_wsi,
                       tile_score_thresh = tile_score_thresh, 
                       return_as_tilesummary_object=return_as_tilesummary_object,
                       wsi_path_to_wsi_info=wsi_path_to_wsi_info) 
