@@ -97,11 +97,11 @@ class NameGetter():
         if not isinstance(classification_labels, list):
             classification_labels=[classification_labels]     
         
-        named_objects=[NamedObject().create(path=p,
+        named_objects=[NamedObject(path=p,
                  patient_id=p_id,
                  case_id=c_id,
                  slide_id=s_id,
-                 classification_labels=c_l)for p, p_id, c_id, s_id, c_l in tqdm(zip(path,patient_id,case_id,slide_id, classification_labels))]
+                 classification_label=c_l)for p, p_id, c_id, s_id, c_l in tqdm(zip(path,patient_id,case_id,slide_id, classification_labels))]
         
         return named_objects
     

@@ -22,24 +22,24 @@ class NamedObject():
         else:
             self.is_valid=None
         
-    def create(self, 
-               path=None, 
-               patient_id=None, 
-               case_id=None, 
-               slide_id=None,
-               classification_label=None,
-               dataset_type:DatasetType=None):
-        self.path=path
-        self.patient_id=patient_id
-        self.case_id=case_id
-        self.slide_id=slide_id
-        self.classification_label=classification_label
-        self.dataset_type=dataset_type
-        if isinstance(dataset_type, Enum):
-            self.is_valid=True if dataset_type==DatasetType.validation else False 
-        else :
-            self.is_valid=None
-        return self
+    #def create(self, 
+    #           path=None, 
+    #           patient_id=None, 
+    #           case_id=None, 
+    #           slide_id=None,
+    #           classification_label=None,
+    #           dataset_type:DatasetType=None):
+    #    self.path=path
+    #    self.patient_id=patient_id
+    #    self.case_id=case_id
+    #    self.slide_id=slide_id
+    #    self.classification_label=classification_label
+    #    self.dataset_type=dataset_type
+    #    if isinstance(dataset_type, Enum):
+    #        self.is_valid=True if dataset_type==DatasetType.validation else False 
+    #    else :
+    #        self.is_valid=None
+    #    return self
     
     def export_dataframe(self):
         df = pd.DataFrame(data={
