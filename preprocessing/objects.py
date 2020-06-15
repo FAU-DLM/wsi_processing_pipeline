@@ -5,6 +5,8 @@ import sklearn
 from enum import Enum
 import typing
 from typing import List
+import pandas
+import pandas as pd
 
 class NamedObject():    
     def __init__(self,                 
@@ -25,26 +27,7 @@ class NamedObject():
             self.is_valid=True if dataset_type==DatasetType.validation else False 
         else:
             self.is_valid=None
-        
-    #def create(self, 
-    #           path=None, 
-    #           patient_id=None, 
-    #           case_id=None, 
-    #           slide_id=None,
-    #           classification_label=None,
-    #           dataset_type:DatasetType=None):
-    #    self.path=path
-    #    self.patient_id=patient_id
-    #    self.case_id=case_id
-    #    self.slide_id=slide_id
-    #    self.classification_label=classification_label
-    #    self.dataset_type=dataset_type
-    #    if isinstance(dataset_type, Enum):
-    #        self.is_valid=True if dataset_type==DatasetType.validation else False 
-    #    else :
-    #        self.is_valid=None
-    #    return self
-    
+            
     def export_dataframe(self):
         df = pd.DataFrame(data={
         'path':self.path ,
@@ -60,8 +43,7 @@ class NamedObject():
 class ObjectManager():
     def __init__(self, 
                  objects:list = None,
-                 splitter:sklearn.model_selection.train_test_split=None,
-                  ):
+                 splitter:sklearn.model_selection.train_test_split=None):
         if not isinstance(objects, list):
             objects=[objects]
         self.objects=objects
@@ -93,9 +75,9 @@ class ObjectManager():
                                      tiles_folder_path=None,
                                      tile_naming_func=None):           
         """
-            Convenvience function that will deal with the process of tile extraction for you.
+            Convenience function that will deal with the process of tile extraction for you.
             Arguments:
-                see wsi_processing_pipeline.tile_extraction.tiles.WsiOrRoiToTiles
+                see wsi_processing_pipeline.tile_extraction.tiles.WsiOrROIToTilesMultithreaded()
         """
        
         
@@ -117,10 +99,10 @@ class ObjectManager():
                       return_as_tilesummary_object=return_as_tilesummary_object,
                       wsi_path_to_wsi_info=wsi_path_to_wsi_info) 
         
-        convert_to_wsi_or_roi_object_by_tilesummary(tilesummaries=tilesummaries)
+        self.convert_to_wsi_or_roi_object_by_tilesummaries(tilesummaries=tilesummaries)
         
         
-    def convert_to_wsi_or_roi_object_by_tilesummary(self, 
+    def convert_to_wsi_or_roi_object_by_tilesummaries(self, 
                                                     tilesummaries:List[wsi_processing_pipeline.tile_extraction.tiles.TileSummary]):
         
         """
@@ -192,7 +174,7 @@ class ObjectManager():
         return df
     
     def split(self, test_size=None, train_size=None, random_state=None, shuffle=True, stratify=None):
-        if not any(isinstance(el, NoneType) for el in self.patient_id):
+        if not any(el is None for el in self.patient_id):
             ids=self.patient_id
             itemid='patient_id'
         else:
@@ -204,7 +186,7 @@ class ObjectManager():
                                        train_size=train_size,
                                        shuffle=shuffle, 
                                        stratify=stratify, 
-                                       random_state=seed)              
+                                       random_state=random_state)              
         
         
         l=[] 
@@ -265,8 +247,7 @@ class WsiOrRoiObject(NamedObject):
     
                   
     def __init__(self,
-                 no,                          
-                ):
+                 no):
         self.no=no
         self.path=no.path 
         self.patient_id=no.patient_id 
@@ -283,8 +264,7 @@ class WsiOrRoiObject(NamedObject):
                  case_id=self.case_id, 
                  slide_id=self.slide_id,
                  classification_label=self.classification_label,
-                 dataset_type=self.dataset_type
-                 )
+                 dataset_type=self.dataset_type)
         
     def process(self,
                 save_tiles=False, 
@@ -293,7 +273,7 @@ class WsiOrRoiObject(NamedObject):
                 tile_height=256,
                 tile_width=256,
                 tiles_folder_path=None,
-                tile_naming_func=None  ):
+                tile_naming_func=None):
         
         wsi_path_to_wsi_info=create_WsiInfo(path=[self.path],
                        patient_id=[self.patient_id],
