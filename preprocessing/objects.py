@@ -18,7 +18,7 @@ class NamedObject():
         self.classification_label=classification_label
         self.dataset_type=dataset_type
         if isinstance(dataset_type, Enum):
-            self.is_valid=True if dataset_type.name=='validation' else False 
+            self.is_valid=True if dataset_type==DatasetType.validation else False 
         else:
             self.is_valid=None
         
@@ -36,7 +36,7 @@ class NamedObject():
         self.classification_label=classification_label
         self.dataset_type=dataset_type
         if isinstance(dataset_type, Enum):
-            self.is_valid=True if dataset_type.name=='validation' else False 
+            self.is_valid=True if dataset_type==DatasetType.validation else False 
         else :
             self.is_valid=None
         return self
