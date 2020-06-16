@@ -243,9 +243,7 @@ def create_WsiInfo(path:list,
         
     return  wsi_path_to_wsi_info   
         
-class WsiOrRoiObject(NamedObject):
-    
-                  
+class WsiOrRoiObject(NamedObject):                 
     def __init__(self,
                  no):
         self.no=no
@@ -304,4 +302,4 @@ class WsiOrRoiObject(NamedObject):
             ts.append(t)
         self.tilesummary.tiles=ts   
         
-        self.tiles=[p for p in self.tilesummary.top_tiles()] 
+        self.tiles=[p for p in self.tilesummary.top_tiles()]
