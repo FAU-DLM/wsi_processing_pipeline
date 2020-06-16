@@ -2,6 +2,7 @@ import wsi_processing_pipeline
 from wsi_processing_pipeline.tile_extraction import tiles
 from wsi_processing_pipeline.tile_extraction.tiles import DatasetType
 import sklearn
+import sklearn.model_selection
 from enum import Enum
 import typing
 from typing import List
@@ -65,6 +66,22 @@ class ObjectManager():
         self.dataset_type=[items.dataset_type for items in self.objects]
         self.is_valid=[items.is_valid for items in self.objects]    
  
+
+    def get_all_top_tiles(self)->List[wsi_processing_pipeline.tile_extraction.tiles.Tile]:
+        """
+        Returns:
+            returns all Tiles (that passed scoring in tile extraction process and are therefore relevant for training) 
+            of all objects in self.objects combined in one list.
+        """
+        tile_list = []
+        for o in self.objects:
+            if not hasattr(o, 'tiles'):
+                continue
+            else:
+                for t in o.tiles:
+                    tile_list.append(t)
+        return tile_list
+
 
     def convert_to_wsi_or_roi_object(self,
                                      save_tiles=False, 
