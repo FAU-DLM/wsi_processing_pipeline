@@ -82,14 +82,6 @@ def TileImageBlock():
 
 
 
-
-
-
-
-
-
-
-
 ####
 # should be obsolete, but was not 100% sure, if it can be deleted
 ####
