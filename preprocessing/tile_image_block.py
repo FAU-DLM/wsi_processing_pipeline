@@ -8,25 +8,24 @@ from wsi_processing_pipeline.preprocessing.objects import NamedObject
 
 class TileImage(Tuple):
     '''
-    This class can 
-    create a PIL Image from a Tile object.
+    This class creates a TensorImage from a wsi_processing_pipeline.tile_extraction.tiles.Tile object.
     additionally the show method enables to display the Tile object as an image
     '''
     @classmethod
-    def create(cls, f): 
+    def create(cls, f):
         if isinstance (f, NamedObject):
             tile=PILImage.create(f.path) 
-        else:            
+        elif isinstance(f, wsi_processing_pipeline.tile_extraction.tiles.Tile):
             wsi_path=f.wsi_path
             x=f.get_x()
             y=f.get_y()         
             width = f.get_width()
             height = f.get_height()
             level = f.level
-            tile = tiles.ExtractTileFromWSI(path=wsi_path, x=x, y=y, width=width, height=height, level=level)        
-        tile = TensorImage(image2tensor(tile))
-        #tile=PILImage.create(tile)
-        return tile
+            tile = tiles.ExtractTileFromWSI(path=wsi_path, x=x, y=y, width=width, height=height, level=level)
+        else:
+            raise ValueError(f'{type(f)} not supported')
+        return TensorImage(image2tensor(tile))
     
     def show(self, ctx=None, **kwargs):    
         img,title = self
@@ -36,7 +35,7 @@ class TileImage(Tuple):
         else: t = img
         #line = t.new_zeros(t.shape[0], t.shape[1], 10)
         #print(type(t))
-        return show_image(t,title=title, ctx=ctx, **kwargs)   
+        return fastai2.torch_core.show_image(t,title=title, ctx=ctx, **kwargs)   
 
 def label_tl_image(f): 
     print(type(f))
@@ -58,8 +57,7 @@ class TileTransform(Transform):
     def __init__(self, tl:wsi_processing_pipeline.tile_extraction.tiles.Tile, splits):
         self.tl= tl
        
-    def encodes(self,f):          
-        
+    def encodes(self,f):                  
         return tile_image(f)     
 
 
@@ -70,15 +68,8 @@ def show_batch(x:TileImage, y, samples, ctxs=None, max_n=6, nrows=None, ncols=2,
     for i,ctx in enumerate(ctxs): TileImage(x[0][i], x[1][i]).show(ctx=ctx)
 
 
-
-
 def TileImageBlock(): 
     return TransformBlock(type_tfms=TileImage.create, batch_tfms=IntToFloatTensor)
-
-
-
-
-
 
 
 
