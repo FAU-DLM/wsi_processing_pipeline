@@ -11,6 +11,10 @@ import pandas as pd
 import functools
 from functools import partial
 from sklearn.model_selection import StratifiedKFold, KFold
+import pathlib
+import multiprocessing
+from tqdm import tqdm
+
 
 class NamedObject():    
     def __init__(self,                 
@@ -43,6 +47,86 @@ class NamedObject():
         'is_valid' : is_valid}, 
          index=[0])
         return df
+
+    
+##########################################
+##########################################
+
+
+def __create_named_object_from_path(path:pathlib.Path, 
+                                    patient_id_getter:Callable, 
+                                    case_id_getter:Callable, 
+                                    slide_id_getter:Callable, 
+                                    classification_labels_getter:Callable)->NamedObject:
+        
+        return wsi_processing_pipeline.preprocessing.objects.NamedObject(path=path, 
+                                                                     patient_id=patient_id_getter(path), 
+                                                                     case_id=case_id_getter(path), 
+                                                                     slide_id=slide_id_getter(path), 
+                                                                     classification_label=classification_labels_getter(path))
+
+
+            
+def create_named_objects_from_paths(paths:List[pathlib.Path], 
+                                            patient_id_getter:Callable, 
+                                            case_id_getter:Callable, 
+                                            slide_id_getter:Callable,                                                               
+                                            classification_labels_getter:Callable,
+                                            in_parallel:bool,
+                                            number_of_workers:int = multiprocessing.cpu_count())->List[NamedObject]:
+        """
+        Maps a list of paths to a list of wsi_processing_pipeline.preprocessing.objects.NamedObject.
+        Arguments:
+            paths: List of paths
+            patient_id_getter: Callable that takes a path and returns the corresponding patient_id
+            case_id_getter: Callable that takes a path and returns the corresponding case_id
+            slide_id_getter: Callable that takes a path and returns the corresponding slide_id
+            classification_labels_getter: Callable that takes a path and returns the corresponding labels as a list
+            in_parallel: if true, the work is performed on {number_of_workers} processes in parallel, else sequential
+            number_of_workers: number of processes that shall be used (only relevant, if in_parallel is set to True)
+        Returns:
+            List of wsi_processing_pipeline.preprocessing.objects.NamedObject
+        """    
+        named_objects = []
+        
+        if in_parallel: 
+            pbar = tqdm(total=len(paths))       
+            def update(no):
+                named_objects.append(no)
+                pbar.update()
+                
+            def error(e):
+                print(e)
+            
+            with multiprocessing.Pool(number_of_workers) as pool:
+                for p in paths:
+                    pool.apply_async(__create_named_object_from_path, 
+                                     kwds={"path":p, 
+                                           "patient_id_getter":patient_id_getter,
+                                           "case_id_getter":case_id_getter, 
+                                           "slide_id_getter":slide_id_getter, 
+                                           "classification_labels_getter":classification_labels_getter}, 
+                                           callback=update, 
+                                           error_callback=error)
+                    
+                        
+                pool.close()
+                pool.join()
+            
+        else:    
+            for p in tqdm(paths):
+                named_objects.append(__create_named_object_from_path(p, 
+                                                patient_id_getter, 
+                                                case_id_getter, 
+                                                slide_id_getter, 
+                                                classification_labels_getter))
+        
+        return named_objects
+    
+
+    
+##########################################
+##########################################
 
 class ObjectManager():
     def __init__(self, 
@@ -280,7 +364,12 @@ class ObjectManager():
         self.split(splitter)
 
         
-        
+
+##########################################
+##########################################        
+      
+    
+    
 def create_WsiInfo(path:list,
                    patient_id:list,
                    case_id:list, 

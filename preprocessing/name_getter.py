@@ -7,6 +7,7 @@ from tqdm import tqdm
 import scandir
 import fastcore
 
+import wsi_processing_pipeline
 from wsi_processing_pipeline.preprocessing.checks import presetter, precheck
 from wsi_processing_pipeline.preprocessing.objects import NamedObject
 
@@ -84,7 +85,7 @@ class NameGetter():
             else:
                 return self.path_to_patient_mapping[path]
             
-       
+                       
     def create_named_object(self, path, patient_id, case_id, slide_id, classification_labels):
         if not isinstance(path, list):
             path=[path]
