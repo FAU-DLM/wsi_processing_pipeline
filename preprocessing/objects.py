@@ -8,7 +8,9 @@ import typing
 from typing import List, Callable
 import pandas
 import pandas as pd
+import functools
 from functools import partial
+from sklearn.model_selection import StratifiedKFold, KFold
 
 class NamedObject():    
     def __init__(self,                 
@@ -194,6 +196,7 @@ class ObjectManager():
             
         return df
     
+    
     def split(self, splitter:Callable):
         """
         Arguments:
@@ -240,6 +243,44 @@ class ObjectManager():
         self.reset()      
         
 
+    def __split_KFold_cross_validation(self, 
+                                       patient_ids:List[str],
+                                       n_splits:int,
+                                       current_iteration:int,
+                                       random_state:int,
+                                       shuffle:bool)->List[List[str]]:
+        kf = KFold(n_splits=n_splits, random_state=random_state, shuffle=shuffle)
+        splits = list(kf.split(patient_ids))
+        split_current_iteration = list(splits)[current_iteration]
+        train_indices = split_current_iteration[0]
+        val_indices = split_current_iteration[1]
+        ids_train = [patient_ids[i] for i in train_indices]
+        ids_val = [patient_ids[i] for i in val_indices]
+        return ids_train, ids_val 
+
+    def split_KFold_cross_validation(self, n_splits:int, current_iteration:int, random_state:int, shuffle:bool):   
+        """
+        Arguments:
+            n_splits: number of splits == the k in k-fold
+            current_iteration: index of the current split; e.g.: if you want to perform 5-fold crossvalidation, 
+                                this parameter might be between [0,4]
+            random_state: integer value, a random seed. If you keep this the same, the splitting will be 
+                         consistent and always the same.
+            shuffle: boolean value that indicates, if the ids should be shuffled before splitting
+
+        """
+        if current_iteration < 0 or current_iteration >= n_splits:
+            raise ValueError(f'current_iteration must be in [0, {n_splits-1}]  (between 0 and n_splits-1)')
+            
+        splitter = functools.partial(self.__split_KFold_cross_validation, 
+                                     n_splits=n_splits, 
+                                     current_iteration=current_iteration, 
+                                     random_state=random_state, 
+                                     shuffle=shuffle)
+        self.split(splitter)
+
+        
+        
 def create_WsiInfo(path:list,
                    patient_id:list,
                    case_id:list, 
