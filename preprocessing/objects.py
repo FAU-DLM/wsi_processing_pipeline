@@ -8,6 +8,7 @@ import typing
 from typing import List, Callable
 import pandas
 import pandas as pd
+from functools import partial
 
 class NamedObject():    
     def __init__(self,                 
@@ -43,26 +44,15 @@ class NamedObject():
 
 class ObjectManager():
     def __init__(self, 
-                 objects:List[NamedObject] = None,
-                 splitter:Callable = None):
+                 objects:List[NamedObject] = None):
         
         """
-        Arguments:
-            splitter: a Callable, that takes the following input parameters:
-                                    set of patient ids
-                                    "test_size": value between 0 and 1, fraction of the validation set
-                                    "shuffle": boolean value that indicates, if the ids should be shuffled before splitting
-                                    "random_state": integer value, a random seed. If you keep this the same, the splitting will be 
-                                                    consistent and always the same.
-                                   and returns two lists:
-                                       list of patient ids for training
-                                       list of patient ids for validation
+
         """
         
         if not isinstance(objects, list):
             objects=[objects]
         self.objects=objects
-        self.splitter=splitter
         self.path=[items.path for items in self.objects]
         self.patient_id=[items.patient_id for items in self.objects]
         self.case_id=[items.case_id for items in self.objects]
@@ -204,7 +194,16 @@ class ObjectManager():
             
         return df
     
-    def split(self, test_size=None, random_state=None, shuffle=True, stratify=None):
+    def split(self, splitter:Callable):
+        """
+        Arguments:
+            splitter: a Callable, that takes the following input parameters (e.g. sklearn.model_selection.train_test_split):
+                                    set of patient ids
+
+                                    and returns two lists:
+                                       list of patient ids for training
+                                       list of patient ids for validation
+        """
         if not any(el is None for el in self.patient_id):
             ids=self.patient_id
             itemid='patient_id'
@@ -212,12 +211,7 @@ class ObjectManager():
             ids= self.case_id  
             itemid='case_id'
            
-        ids_train, ids_test = self.splitter(list(set(ids)), 
-                                       test_size=test_size,
-                                       train_size= 1 - test_size,
-                                       shuffle=shuffle, 
-                                       stratify=stratify, 
-                                       random_state=random_state)              
+        ids_train, ids_test = splitter(list(set(ids)))              
         
         
         l=[] 
