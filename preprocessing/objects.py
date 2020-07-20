@@ -51,10 +51,12 @@ class ObjectManager():
             splitter: a Callable, that takes the following input parameters:
                                     set of patient ids
                                     "test_size": value between 0 and 1, fraction of the validation set
-                                    "train_size": value between 0 and 1, fraction of the train set
                                     "shuffle": boolean value that indicates, if the ids should be shuffled before splitting
                                     "random_state": integer value, a random seed. If you keep this the same, the splitting will be 
-                                                    consistent and always the same.           
+                                                    consistent and always the same.
+                                   and returns two lists:
+                                       list of patient ids for training
+                                       list of patient ids for validation
         """
         
         if not isinstance(objects, list):
@@ -202,7 +204,7 @@ class ObjectManager():
             
         return df
     
-    def split(self, test_size=None, train_size=None, random_state=None, shuffle=True, stratify=None):
+    def split(self, test_size=None, random_state=None, shuffle=True, stratify=None):
         if not any(el is None for el in self.patient_id):
             ids=self.patient_id
             itemid='patient_id'
@@ -212,7 +214,7 @@ class ObjectManager():
            
         ids_train, ids_test = self.splitter(list(set(ids)), 
                                        test_size=test_size,
-                                       train_size=train_size,
+                                       train_size= 1 - test_size,
                                        shuffle=shuffle, 
                                        stratify=stratify, 
                                        random_state=random_state)              
