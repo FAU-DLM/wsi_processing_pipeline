@@ -106,21 +106,25 @@ class NameGetter():
         return named_objects
     
     def create_named_object_from_path(self,
-                                      path=None,
-                                      patient_id_getter=None,
-                                      case_id_getter=None,
-                                      slide_id_getter=None,
-                                      classification_labels_getter=None):
-        presetter(variables={'path':path                             
-                             },
-                             cls=self
-                             )
-        precheck(types=['path'], 
-                      path={'path':self.path
-                           },
-                     cls=self)
+                                      path:List[Union[pathlib.Path, str]]=None,
+                                      patient_id_getter:Callable=None,
+                                      case_id_getter:Callable=None,
+                                      slide_id_getter:Callable=None,
+                                      classification_labels_getter:Callable=None):
+        """
+        Arguments:
+            path: List of paths
+            patient_id_getter: Callable that takes a path as input and returns the corresponding patient id
+            case_id_getter: Callable that takes a path as input and returns the corresponding case id
+            slide_id_getter: Callable that takes a path as input and returns the corresponding slide id
+            classification_labels_getter: Callable that takes a path as input and returns the corresponding labels
+        Returns: List of wsi_processing_pipeline.preprocessing.objects.NamedObject
+            
+        """
+        presetter(variables={'path':path},cls=self)
+        precheck(types=['path'], path={'path':self.path}, cls=self)
         
-        paths, patient_id, case_id, slide_id, classification_labels =self.get_ids_from_path(path=self.path,
+        paths, patient_id, case_id, slide_id, classification_labels = self.get_ids_from_path(path=self.path,
                                                             patient_id_getter=patient_id_getter,
                                                             case_id_getter=case_id_getter,
                                                             slide_id_getter=slide_id_getter,
@@ -129,7 +133,7 @@ class NameGetter():
            
         named_objects=self.create_named_object(paths, patient_id, case_id, slide_id, classification_labels)
         
-        return named_objects            
+        return named_objects           
     
     
     def get_ids_from_path(self, 
@@ -139,14 +143,9 @@ class NameGetter():
                           slide_id_getter=None,
                           classification_labels_getter=None):
         
-        presetter(variables={'path':path                             
-                             },
-                             cls=self
-                             )
-        precheck(types=['path'], 
-                      path={'path':self.path
-                           },
-                     cls=self)        
+        presetter(variables={'path':path}, cls=self)
+        precheck(types=['path'], path={'path':self.path}, cls=self)
+        
         if not isinstance(path, list):
             path=[path]
         if not patient_id_getter:
