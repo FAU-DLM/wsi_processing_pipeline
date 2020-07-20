@@ -5,7 +5,7 @@ import sklearn
 import sklearn.model_selection
 from enum import Enum
 import typing
-from typing import List
+from typing import List, Callable
 import pandas
 import pandas as pd
 
@@ -37,14 +37,26 @@ class NamedObject():
         'slide_id':self.slide_id,
         'classification_label':self.classification_label,
         'dataset_type':self.dataset_type,
-        'is_valid' : is_valid             
-            }, index=[0])
+        'is_valid' : is_valid}, 
+         index=[0])
         return df
 
 class ObjectManager():
     def __init__(self, 
-                 objects:list = None,
-                 splitter:sklearn.model_selection.train_test_split=None):
+                 objects:List[NamedObject] = None,
+                 splitter:Callable = None):
+        
+        """
+        Arguments:
+            splitter: a Callable, that takes the following input parameters:
+                                    set of patient ids
+                                    "test_size": value between 0 and 1, fraction of the validation set
+                                    "train_size": value between 0 and 1, fraction of the train set
+                                    "shuffle": boolean value that indicates, if the ids should be shuffled before splitting
+                                    "random_state": integer value, a random seed. If you keep this the same, the splitting will be 
+                                                    consistent and always the same.           
+        """
+        
         if not isinstance(objects, list):
             objects=[objects]
         self.objects=objects
