@@ -893,6 +893,9 @@ def WsiOrROIToTilesMultithreaded(wsi_paths:List[pathlib.Path],
     def update(res):
         results.append(res)
         pbar.update()
+        
+    def error(e):
+        print(e)
     
     with multiprocessing.Pool() as pool:
         for p in wsi_paths:
@@ -911,7 +914,8 @@ def WsiOrROIToTilesMultithreaded(wsi_paths:List[pathlib.Path],
                                    "return_as_tilesummary_object":return_as_tilesummary_object, 
                                    "wsi_info":util.safe_dict_access(wsi_path_to_wsi_info, p), 
                                    "verbose":verbose}, 
-                                   callback=update)
+                                   callback=update, 
+                                   error_callback=error)
             
                 
         pool.close()
