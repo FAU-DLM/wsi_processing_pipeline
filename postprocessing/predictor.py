@@ -1,38 +1,40 @@
+import fastai2
+import wsi_processing_pipeline
+from wsi_processing_pipeline.preprocessing.objects import NamedObject
+
 class Predictor(object):
     
     def __init__(self, 
-                 learner=learner,                  
-                 path=DATAPATH, 
-                 tta=False,
-                 thresh=0.5, 
-                 exclude_failed=False, 
-                 dl=None                
-                 ):
+                 learner:fastai2.learner.Learner,                  
+                 path, 
+                 tta:bool=False,
+                 thresh:float=0.5, 
+                 exclude_failed:bool=False, 
+                 dl:fastai2.data.core.TfmdDL=None):
         
+        if learner is None or not isinstance(learner, fastai2.learner.Learner):            
+            raise AssertionError('please make sure to use a "fastai2.learner.Learner" as "learner" input') 
+        
+        if dl is not None and not isinstance(dl, fastai2.data.core.TfmdDL):        
+            raise AssertionError('please make sure to use a "fastai2.data.core.TfmdDL" as dataloader - dl - input')
+        
+        elif dl is not None and isinstance(dl, fastai2.data.core.TfmdDL):
+            self.dl = dl
+            self.ds = dl.dataset
+        
+        elif dl is None:
+            self.dl = learner.dls.valid
+            self.ds = learner.dls.valid_ds
+        else:
+            assert False # This case should not happen
+                    
         self.learner=learner        
         self.path=path
         self.tta=tta
         self.thresh=thresh
         self.exclude_failed=exclude_failed
-        self.dl=dl        
-   
-        if self.learner and not isinstance(self.learner, fastai2.learner.Learner) or not self.learner:            
-            raise AssertionError('please make sure to use a "fastai2.learner.Learner" as "learner" input') 
-            
-
-        if self.dl is None:
-            self.dl=self.learner.dls.valid
-            self.ds=self.learner.dls.valid_ds
-            
-
-        if self.dl and not isinstance(self.dl, fastai2.data.core.TfmdDL):        
-            raise AssertionError('please make sure to use a "fastai2.data.core.TfmdDL" as dataloader - dl - input')    
-            
-
-        if self.dl and isinstance(self.dl, fastai2.data.core.TfmdDL):
-            self.ds=self.dl.dataset
-            
-        self.cat = Categorize(vocab=self.ds.vocab)
+                        
+        self.cat = fastai2.data.transforms.Categorize(vocab=self.ds.vocab)
         self.ds_items_checker()
 
        
