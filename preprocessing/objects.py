@@ -22,14 +22,14 @@ class NamedObject():
                  patient_id=None, 
                  case_id=None, 
                  slide_id=None,
-                 classification_label=None,
+                 classification_labels=None,
                  dataset_type:DatasetType=None):
         
         self.path=path
         self.patient_id=patient_id
         self.case_id=case_id
         self.slide_id=slide_id
-        self.classification_label=classification_label
+        self.classification_labels=classification_labels
         self.dataset_type=dataset_type
         if isinstance(dataset_type, Enum):
             self.is_valid=True if dataset_type==DatasetType.validation else False 
@@ -42,7 +42,7 @@ class NamedObject():
         'patient_id':self.patient_id,
         'case_id':self.case_id,
         'slide_id':self.slide_id,
-        'classification_label':self.classification_label,
+        'classification_labels':self.classification_labels,
         'dataset_type':self.dataset_type,
         'is_valid' : is_valid}, 
          index=[0])
@@ -63,7 +63,7 @@ def __create_named_object_from_path(path:pathlib.Path,
                                                                      patient_id=patient_id_getter(path), 
                                                                      case_id=case_id_getter(path), 
                                                                      slide_id=slide_id_getter(path), 
-                                                                     classification_label=classification_labels_getter(path))
+                                                                     classification_labels=classification_labels_getter(path))
 
 
             
@@ -143,7 +143,7 @@ class ObjectManager():
         self.patient_id=[items.patient_id for items in self.objects]
         self.case_id=[items.case_id for items in self.objects]
         self.slide_id=[items.slide_id for items in self.objects]
-        self.classification_label=[items.classification_label for items in self.objects]
+        self.classification_labels=[items.classification_labels for items in self.objects]
         self.dataset_type=[items.dataset_type for items in self.objects]
         self.is_valid=[items.is_valid for items in self.objects]        
     
@@ -152,7 +152,7 @@ class ObjectManager():
         self.patient_id=[items.patient_id for items in self.objects]
         self.case_id=[items.case_id for items in self.objects]
         self.slide_id=[items.slide_id for items in self.objects]
-        self.classification_label=[items.classification_label for items in self.objects]
+        self.classification_labels=[items.classification_labels for items in self.objects]
         self.dataset_type=[items.dataset_type for items in self.objects]
         self.is_valid=[items.is_valid for items in self.objects]    
  
@@ -192,7 +192,7 @@ class ObjectManager():
                                                patient_id=self.patient_id,
                                                case_id=self.case_id, 
                                                slide_id=self.slide_id,
-                                               classification_labels=self.classification_label,
+                                               classification_labels=self.classification_labels,
                                                dataset_type=self.dataset_type)
         
         tilesummaries=tiles.WsiOrROIToTilesMultithreaded(
@@ -269,7 +269,7 @@ class ObjectManager():
         else:
             df = pd.DataFrame(data={
             'fname':self.path ,
-            'labels':self.classification_label,
+            'labels':self.classification_labels,
             'is_valid': self.is_valid,
             'patient_id':self.patient_id,
             'case_id':self.case_id,
@@ -318,7 +318,7 @@ class ObjectManager():
                     t.slide_id=item.slide_id
                     t.dataset_type=item.dataset_type
                     t.is_valid=item.is_valid
-                    t.classification_labels=item.classification_label
+                    t.classification_labels=item.classification_labels
                     ts.append(t)            
                 item.tilesummary.tiles=ts  
                 item.tiles=item.tilesummary.top_tiles()
@@ -406,7 +406,7 @@ class WsiOrRoiObject(NamedObject):
         self.patient_id=no.patient_id 
         self.case_id=no.case_id
         self.slide_id=no.slide_id
-        self.classification_label=no.classification_label
+        self.classification_labels=no.classification_labels
         self.dataset_type=no.dataset_type
         self.is_valid=no.is_valid
         self.tile_id=None
@@ -416,7 +416,7 @@ class WsiOrRoiObject(NamedObject):
                  patient_id=self.patient_id, 
                  case_id=self.case_id, 
                  slide_id=self.slide_id,
-                 classification_label=self.classification_label,
+                 classification_labels=self.classification_labels,
                  dataset_type=self.dataset_type)
         
     def process(self,
@@ -432,7 +432,7 @@ class WsiOrRoiObject(NamedObject):
                        patient_id=[self.patient_id],
                    case_id=[self.case_id], 
                    slide_id=[self.slide_id],
-                   classification_labels=[self.classification_label],
+                   classification_labels=[self.classification_labels],
                    dataset_type=[self.dataset_type]
                       )        
         
