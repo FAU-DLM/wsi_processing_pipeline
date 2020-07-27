@@ -1,6 +1,7 @@
 import fastai2
 import wsi_processing_pipeline
 from wsi_processing_pipeline.preprocessing.objects import NamedObject
+import pandas as pd
 
 class Predictor(object):
     
