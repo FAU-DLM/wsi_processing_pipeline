@@ -297,9 +297,16 @@ class ObjectManager():
         else:
             ids= self.case_id  
             itemid='case_id'
-           
+        
+        # sorting ensures a reproduceable split of the ids. If the same ids are given in a different order to the method,
+        # without sorting it would result in a different split, even if random_state is the the same (and numpy.random.seed()).
+        ids.sort()
+        
         ids_train, ids_test = splitter(list(set(ids)))              
         
+        #print(len(ids_train)+len(ids_test))
+        #print(len(ids_train))
+        #print(len(ids_test))
         
         l=[] 
         
@@ -333,6 +340,9 @@ class ObjectManager():
                                        current_iteration:int,
                                        random_state:int,
                                        shuffle:bool)->List[List[str]]:
+        # sorting ensures a reproduceable split of the ids. If the same ids are given in a different order to the method,
+        # without sorting it would result in a different split, even if random_state is the the same (and numpy.random.seed()).
+        patient_ids.sort()        
         kf = KFold(n_splits=n_splits, random_state=random_state, shuffle=shuffle)
         splits = list(kf.split(patient_ids))
         split_current_iteration = list(splits)[current_iteration]
