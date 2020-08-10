@@ -102,7 +102,7 @@ class NameGetter():
                  patient_id=p_id,
                  case_id=c_id,
                  slide_id=s_id,
-                 classification_label=c_l)for p, p_id, c_id, s_id, c_l in tqdm(zip(path,patient_id,case_id,slide_id, classification_labels))]
+                 classification_labels=c_l)for p, p_id, c_id, s_id, c_l in tqdm(zip(path,patient_id,case_id,slide_id, classification_labels))]
         
         return named_objects
     
