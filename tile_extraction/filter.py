@@ -301,7 +301,7 @@ def filter_remove_small_holes(np_img, min_size=3000, output_type="uint8"):
   """
   t = Time()
 
-  rem_sm = sk_morphology.remove_small_holes(np_img, min_size=min_size)
+  rem_sm = sk_morphology.remove_small_holes(np_img, area_threshold=min_size)
 
   if output_type == "bool":
     pass
