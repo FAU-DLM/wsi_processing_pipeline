@@ -217,7 +217,7 @@ class ObjectManager():
         """
         lst=[]
         for tilesummary in tilesummaries:
-            objs = __find_named_objects__(tilesummary.wsi_path)
+            objs = self.__find_named_objects__(tilesummary.wsi_path)
             if(len(objs) == 0):
                 raise ValueError("No NamedObject in ObjectManager's object list, that has the same path as the tilesummary")
             if(len(objs) > 1):
@@ -227,7 +227,7 @@ class ObjectManager():
             obj = WsiOrRoiObject(obj)            
             obj.tilesummary = tilesummary              
             tiles=[]
-            for tile in objects.tilesummary.tiles:            
+            for tile in obj.tilesummary.tiles:            
                 tile.is_valid=obj.is_valid           
                 tiles.append(tile)
             obj.tilesummary.tiles=tiles  
