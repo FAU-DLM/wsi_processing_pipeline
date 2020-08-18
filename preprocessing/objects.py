@@ -203,7 +203,7 @@ class ObjectManager():
                       tile_naming_func=tile_naming_func,
                       save_tiles=save_tiles, 
                       tile_score_thresh = tile_score_thresh, 
-                      return_as_tilesummary_object=return_as_tilesummary_object,
+                      return_as_tilesummary_object=True,
                       wsi_path_to_wsi_info=wsi_path_to_wsi_info) 
         
         self.convert_to_wsi_or_roi_object_by_tilesummaries(tilesummaries=tilesummaries)
@@ -215,24 +215,54 @@ class ObjectManager():
         """
         If you prefer to create TileSummary objects yourself. (see wsi_processing_pipeline.tile_extraction example.ipynb)                                           
         """
-        
-        self.objects=sorted(self.objects, key=lambda x: x.path, reverse=True)
-        tilesummaries=sorted(tilesummaries, key=lambda x: x.wsi_path, reverse=True)
         lst=[]
-        for summary, objects in zip(tilesummaries, self.objects):            
-            objects=WsiOrRoiObject(objects)            
-            objects.tilesummary = summary              
-            ts=[]
-            for t in objects.tilesummary.tiles:            
-                t.is_valid=objects.is_valid           
-                ts.append(t)
-            objects.tilesummary.tiles=ts  
-            objects.tiles=objects.tilesummary.top_tiles()
-            lst.append(objects)    
+        for tilesummary in tilesummaries:
+            objs = __find_named_objects__(tilesummary.wsi_path)
+            if(len(objs) == 0):
+                raise ValueError("No NamedObject in ObjectManager's object list, that has the same path as the tilesummary")
+            if(len(objs) > 1):
+                raise ValueError("More than one NamedObject in ObjectManager's object list, that has the same path as the \
+                                 tilesummary. There should be only one NamedObject with the same path!")
+            obj = objs[0]
+            obj = WsiOrRoiObject(obj)            
+            obj.tilesummary = tilesummary              
+            tiles=[]
+            for tile in objects.tilesummary.tiles:            
+                tile.is_valid=obj.is_valid           
+                tiles.append(tile)
+            obj.tilesummary.tiles=tiles  
+            obj.tiles=obj.tilesummary.top_tiles()
+            lst.append(obj)    
             
         self.objects=lst 
         self.reset()
         
+        #self.objects=sorted(self.objects, key=lambda x: x.path, reverse=True)
+        #tilesummaries=sorted(tilesummaries, key=lambda x: x.wsi_path, reverse=True)
+        #lst=[]
+        #for summary, objects in zip(tilesummaries, self.objects):            
+        #    objects=WsiOrRoiObject(objects)            
+        #    objects.tilesummary = summary              
+        #    ts=[]
+        #    for t in objects.tilesummary.tiles:            
+        #        t.is_valid=objects.is_valid           
+        #        ts.append(t)
+        #    objects.tilesummary.tiles=ts  
+        #    objects.tiles=objects.tilesummary.top_tiles()
+        #    lst.append(objects)    
+        #    
+        #self.objects=lst 
+        #self.reset()
+        
+    def __find_named_objects__(self, path)->List[NamedObject]:
+        """
+        finds all NamedObject objects in self.objects by the specified path
+        """
+        objs = []
+        for o in self.objects:
+            if(o.path == path):
+                objs.append(o)
+        return objs
          
     def export_dataframe(self):
         if any(isinstance(el, WsiOrRoiObject) for el in self.objects):            
