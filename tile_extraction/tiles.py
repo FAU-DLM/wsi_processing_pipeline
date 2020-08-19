@@ -484,6 +484,7 @@ class Tile:
     classification_labels:List = None
     dataset_type:DatasetType = None
     roi:RegionOfInterest = None
+    tile_path = None
                 
     def __init__(self, 
                  tile_summary, 
@@ -515,7 +516,8 @@ class Tile:
                  case_id = None, 
                  slide_id = None, 
                  classification_labels:List = None, 
-                 dataset_type:DatasetType = None):
+                 dataset_type:DatasetType = None, 
+                 tile_path = None):
         """
         Arguments:
             level: whole-slide image's level, the tile shall be extracted from
@@ -555,6 +557,7 @@ class Tile:
         self.slide_id = slide_id
         self.classification_labels = classification_labels
         self.dataset_type = dataset_type
+        self.tile_path = tile_path
 
     def __str__(self):
         return "[Tile #%d, Row #%d, Column #%d, Tissue %4.2f%%, Score %0.4f]" % (
