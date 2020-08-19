@@ -23,7 +23,8 @@ class NamedObject():
                  case_id=None, 
                  slide_id=None,
                  classification_labels=None,
-                 dataset_type:DatasetType=None):
+                 dataset_type:DatasetType=None, 
+                 tiles:List[wsi_processing_pipeline.tile_extraction.tiles.Tile]=None):
         
         self.path=path
         self.patient_id=patient_id
@@ -35,6 +36,7 @@ class NamedObject():
             self.is_valid=True if dataset_type==DatasetType.validation else False 
         else:
             self.is_valid=None
+        self.tiles = tiles
             
     def export_dataframe(self):
         df = pd.DataFrame(data={
@@ -53,31 +55,68 @@ class NamedObject():
 ##########################################
 
 
-def __create_named_object_from_path(path:pathlib.Path, 
+def __create_named_object_by_slide_id(slide_id:str, 
+                                    tile_paths:List[pathlib.Path], 
                                     patient_id_getter:Callable, 
                                     case_id_getter:Callable, 
                                     slide_id_getter:Callable, 
                                     classification_labels_getter:Callable)->NamedObject:
-        
-        return wsi_processing_pipeline.preprocessing.objects.NamedObject(path=path, 
-                                                                     patient_id=patient_id_getter(path), 
-                                                                     case_id=case_id_getter(path), 
-                                                                     slide_id=slide_id_getter(path), 
-                                                                     classification_labels=classification_labels_getter(path))
-
-
+        #extract only those tile paths, that belong to the same slide
+        paths = [p for p in tile_paths if slide_id == slide_id_getter(p)]
+        #create tile objects
+        tiles = []
+        for p in paths:
+            tiles.append(wsi_processing_pipeline.tile_extraction.tiles.Tile(tile_summary=None,
+                                                   wsi_path=None,
+                                                   tiles_folder_path=None,
+                                                   np_scaled_filtered_tile=None,
+                                                   tile_num=None,
+                                                   r=None,
+                                                   c=None,
+                                                   r_s=None,
+                                                   r_e=None,
+                                                   c_s=None,
+                                                   c_e=None,
+                                                   o_r_s=None,
+                                                    o_r_e=None,
+                                                    o_c_s=None,
+                                                    o_c_e=None,
+                                                    t_p=None,
+                                                    color_factor=None,
+                                                    s_and_v_factor=None,
+                                                    quantity_factor=None,
+                                                    score=None,
+                                                    tile_naming_func=None,
+                                                    level=None,
+                                                    best_level_for_downsample=None,
+                                                    real_scale_factor=None,
+                                                    roi=None,
+                                                   patient_id=patient_id_getter(p), 
+                                                    case_id=case_id_getter(p), 
+                                                    slide_id=slide_id, 
+                                                    classification_labels=classification_labels_getter(p), 
+                                                    tile_path=p))
             
-def create_named_objects_from_paths(paths:List[pathlib.Path], 
+        return NamedObject(path=None, 
+                           patient_id=patient_id_getter(p), 
+                           case_id=case_id_getter(p), 
+                           slide_id=slide_id_getter(p), 
+                           classification_labels=classification_labels_getter(p), 
+                           tiles=tiles)
+
+
+def create_named_objects_from_tile_paths(tile_paths:List[pathlib.Path], 
                                             patient_id_getter:Callable, 
                                             case_id_getter:Callable, 
                                             slide_id_getter:Callable,                                                               
                                             classification_labels_getter:Callable,
-                                            in_parallel:bool,
+                                            in_parallel:bool,                                            
                                             number_of_workers:int = multiprocessing.cpu_count())->List[NamedObject]:
         """
-        Maps a list of paths to a list of wsi_processing_pipeline.preprocessing.objects.NamedObject.
+        Creates a list of NamedObject from a list of paths of prextracted tile images. Tiles from the same whole-slide
+        image (with the same slide_ids) will be accumulated in one NamedObject.
         Arguments:
-            paths: List of paths
+            tile_paths: List of paths to preextracted tiles
             patient_id_getter: Callable that takes a path and returns the corresponding patient_id
             case_id_getter: Callable that takes a path and returns the corresponding case_id
             slide_id_getter: Callable that takes a path and returns the corresponding slide_id
@@ -86,22 +125,32 @@ def create_named_objects_from_paths(paths:List[pathlib.Path],
             number_of_workers: number of processes that shall be used (only relevant, if in_parallel is set to True)
         Returns:
             List of wsi_processing_pipeline.preprocessing.objects.NamedObject
-        """    
+        """
+        
+        #maps slide ids to list of tile paths
+        d = {}
+        for p in tile_paths:
+            slide_id = slide_id_getter(p)
+            if not(slide_id in d.keys()):
+                d[slide_id] = []
+            d[slide_id].append(p)
+                
         named_objects = []
         
-        if in_parallel: 
-            pbar = tqdm(total=len(paths))       
+        if in_parallel:           
+            pbar = tqdm(total=len(d))       
             def update(no):
                 named_objects.append(no)
                 pbar.update()
                 
             def error(e):
                 print(e)
-            
+                        
             with multiprocessing.Pool(number_of_workers) as pool:
-                for p in paths:
-                    pool.apply_async(__create_named_object_from_path, 
-                                     kwds={"path":p, 
+                for slide_id in d.keys():
+                    pool.apply_async(__create_named_object_by_slide_id, 
+                                     kwds={"slide_id":slide_id,
+                                           "tile_paths":d[slide_id],
                                            "patient_id_getter":patient_id_getter,
                                            "case_id_getter":case_id_getter, 
                                            "slide_id_getter":slide_id_getter, 
@@ -114,13 +163,14 @@ def create_named_objects_from_paths(paths:List[pathlib.Path],
                 pool.join()
             
         else:    
-            for p in tqdm(paths):
-                named_objects.append(__create_named_object_from_path(p, 
+            for slide_id in d.keys():
+                named_objects.append(__create_named_object_by_slide_id(slide_id,
+                                                d[slide_id],
                                                 patient_id_getter, 
                                                 case_id_getter, 
                                                 slide_id_getter, 
                                                 classification_labels_getter))
-        
+                
         return named_objects
     
 
