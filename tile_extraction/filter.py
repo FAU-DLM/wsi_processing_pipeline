@@ -29,12 +29,7 @@ import skimage.future as sk_future
 import skimage.morphology as sk_morphology
 import skimage.segmentation as sk_segmentation
 
-import sys
-sys.path.append("../")
-from tile_extraction import util, tiles, slide, openslide_overwrite
-from tile_extraction.util import *
-
-
+import util, tiles, slide, openslide_overwrite
 
 
 def filter_img(img_pil:PIL.Image.Image) -> PIL.Image.Image:

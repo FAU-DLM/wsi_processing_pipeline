@@ -31,6 +31,7 @@ sys.path.append("../")
 import tile_extraction
 from tile_extraction import tiles
 from tiles import *
+from shared.roi import *
 
 # If True, display additional NumPy array stats (min, max, mean, is_binary).
 ADDITIONAL_NP_STATS = False
@@ -134,21 +135,21 @@ def show_multiple_images_big(paths:list, axis_off:bool = False):
 
 
 def pil_to_np_rgb(pil_img):
-  """
-  Convert a PIL Image to a NumPy array.
-
-  Note that RGB PIL (w, h) -> NumPy (h, w, 3).
-
-  Args:
-    pil_img: The PIL Image.
-
-  Returns:
-    The PIL image converted to a NumPy array.
-  """
-  #t = Time()
-  rgb = np.asarray(pil_img)
-  #np_info(rgb, "RGB", t.elapsed())
-  return rgb
+    """
+     Convert a PIL Image to a NumPy array.
+    
+     Note that RGB PIL (w, h) -> NumPy (h, w, 3).
+    
+     Args:
+       pil_img: The PIL Image.
+    
+     Returns:
+       The PIL image converted to a NumPy array.
+     """
+    #t = Time()
+    rgb = np.asarray(pil_img)
+    #np_info(rgb, "RGB", t.elapsed())
+    return rgb
 
 
 def np_to_pil(np_img):
