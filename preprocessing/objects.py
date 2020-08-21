@@ -1,3 +1,19 @@
+#####
+#
+#
+#
+#
+# These classes and functions are deprecated and will be removed in the near future.
+# Use the shared.patient_manager.PatientManager instead
+#
+#
+#
+#
+#
+#
+#####
+
+
 import wsi_processing_pipeline
 from wsi_processing_pipeline.tile_extraction import tiles
 from wsi_processing_pipeline.tile_extraction.tiles import DatasetType
@@ -15,6 +31,10 @@ import pathlib
 import multiprocessing
 from tqdm import tqdm
 
+import warnings
+def deprecation():
+    message = "This class is deprecated, use shared.patient_manager.PatientManager instead."
+    warnings.warn(message, DeprecationWarning, stacklevel=2)
 
 class NamedObject():    
     def __init__(self,                 
@@ -25,6 +45,8 @@ class NamedObject():
                  classification_labels=None,
                  dataset_type:DatasetType=None, 
                  tiles:List[wsi_processing_pipeline.tile_extraction.tiles.Tile]=None):
+        
+        deprecation()
         
         self.path=path
         self.patient_id=patient_id
@@ -185,6 +207,9 @@ class ObjectManager():
         """
 
         """
+        
+        deprecation()
+        
         
         if not isinstance(objects, list):
             objects=[objects]
@@ -491,6 +516,10 @@ def create_WsiInfo(path:list,
 class WsiOrRoiObject(NamedObject):                 
     def __init__(self,
                  no):
+        
+        deprecation()
+        
+        
         self.no=no
         self.path=no.path 
         self.patient_id=no.patient_id 

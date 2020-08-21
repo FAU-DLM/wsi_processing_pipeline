@@ -1,3 +1,23 @@
+#####
+#
+#
+#
+#
+# These functions are deprecated and will be removed in the near future.
+# 
+#
+#
+#
+#
+#
+#
+#####
+
+
+
+
+
+
 import pathlib
 from pathlib import Path
 import fastcore
