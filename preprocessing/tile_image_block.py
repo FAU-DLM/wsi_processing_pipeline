@@ -4,6 +4,7 @@ import wsi_processing_pipeline
 from wsi_processing_pipeline.tile_extraction import slide, filter, tiles, util
 from wsi_processing_pipeline.preprocessing.name_getter import NameGetter
 from wsi_processing_pipeline.preprocessing.objects import NamedObject
+import shared
 
 
 class TileImage(Tuple):
@@ -15,8 +16,8 @@ class TileImage(Tuple):
     def create(cls, f):
         if isinstance (f, NamedObject):
             tile=PILImage.create(f.path) 
-        elif isinstance(f, wsi_processing_pipeline.tile_extraction.tiles.Tile):
-            wsi_path=f.wsi_path
+        elif isinstance(f, shared.tile.Tile):
+            wsi_path=f.get_wsi_path()
             x=f.get_x()
             y=f.get_y()         
             width = f.get_width()
