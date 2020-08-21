@@ -227,9 +227,10 @@ class PatientManager:
             splitter: a Callable, that takes the following input parameters (e.g. sklearn.model_selection.train_test_split):
                                     set of patient ids
 
-                                    and returns two lists:
-                                       list of patient ids for training
-                                       list of patient ids for validation
+                                    and returns three lists:
+                                       list of patient ids for the training set
+                                       list of patient ids for the validation set
+                                       list of patient ids for the test set
         """
 
         patient_ids = [patient.patient_id for patient in self.patients]
@@ -238,12 +239,14 @@ class PatientManager:
         # without sorting it would result in a different split, even if random_state is the the same (and numpy.random.seed()).
         patient_ids.sort()
         
-        ids_train, ids_val = splitter(list(set(patient_ids)))              
+        ids_train, ids_val, ids_test = splitter(list(set(patient_ids)))              
         for patient in self.patients:
             if(patient.patient_id in ids_val):
                 patient.dataset_type = DatasetType.validation
             elif(patient.patient_id in ids_train):
                 patient.dataset_type = DatasetType.train
+            elif(patient.patient_id in ids_test):
+                patient.dataset_type = DatasetType.test
             else:
                 assert False
                 
@@ -264,7 +267,8 @@ class PatientManager:
         val_indices = split_current_iteration[1]
         ids_train = [patient_ids[i] for i in train_indices]
         ids_val = [patient_ids[i] for i in val_indices]
-        return ids_train, ids_val 
+        ids_test = []
+        return ids_train, ids_val, ids_test 
 
     def split_KFold_cross_validation(self, n_splits:int, current_iteration:int, random_state:int, shuffle:bool):   
         """
