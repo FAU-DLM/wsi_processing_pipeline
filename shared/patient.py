@@ -9,11 +9,13 @@ if typing.TYPE_CHECKING:
 from typing import List, Callable, Tuple
 from shared.case import Case
 from shared.patient_manager import PatientManager
+from shared.enums import DatasetType
 
 class Patient:    
     patient_id:str = None
     patient_manager:PatientManager = None
     cases:List[Case] = None
+    dataset_type:DatasetType = None
         
     def __init__(self, patient_id:str, patient_manager:PatientManager):
         self.cases = []

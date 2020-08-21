@@ -49,31 +49,32 @@ class Tile:
     labels = None
                 
     def __init__(self, 
-                 tile_summary, 
-                 tiles_folder_path, 
-                 np_scaled_filtered_tile, 
-                 tile_num, 
-                 r, 
-                 c, 
-                 r_s, 
-                 r_e, 
-                 c_s, 
-                 c_e, 
-                 o_r_s, 
-                 o_r_e, 
-                 o_c_s,
-                 o_c_e, 
-                 t_p, 
-                 color_factor, 
-                 s_and_v_factor, 
-                 quantity_factor, 
-                 score, 
-                 tile_naming_func, 
-                 level,
-                 best_level_for_downsample,
-                 real_scale_factor,
-                 roi:RegionOfInterest,
-                 tile_path = None):
+                 tile_summary=None, 
+                 tiles_folder_path=None, 
+                 np_scaled_filtered_tile=None, 
+                 tile_num=None, 
+                 r=None, 
+                 c=None, 
+                 r_s=None, 
+                 r_e=None, 
+                 c_s=None, 
+                 c_e=None, 
+                 o_r_s=None, 
+                 o_r_e=None, 
+                 o_c_s=None,
+                 o_c_e=None, 
+                 t_p=None, 
+                 color_factor=None, 
+                 s_and_v_factor=None, 
+                 quantity_factor=None, 
+                 score=None, 
+                 tile_naming_func=None, 
+                 level=None,
+                 best_level_for_downsample=None,
+                 real_scale_factor=None,
+                 roi:RegionOfInterest=None,
+                 tile_path = None, 
+                 labels:List[int] = None):
         """
         Arguments:
             level: whole-slide image's level, the tile shall be extracted from
@@ -107,10 +108,14 @@ class Tile:
         self.best_level_for_downsample = best_level_for_downsample
         self.real_scale_factor = real_scale_factor
         self.tile_path = tile_path
+        self.labels = labels
 
     def __str__(self):
-        return "[Tile #%d, Row #%d, Column #%d, Tissue %4.2f%%, Score %0.4f]" % (
-          self.tile_num, self.r, self.c, self.tissue_percentage, self.score)
+        if(self.tile_path != None):
+            return str(self.tile_path)
+        else:
+            return "[Tile #%d, Row #%d, Column #%d, Tissue %4.2f%%, Score %0.4f]" % (
+              self.tile_num, self.r, self.c, self.tissue_percentage, self.score)
 
     def __repr__(self):
         return "\n" + self.__str__()
@@ -165,3 +170,9 @@ class Tile:
                   
     def get_name(self)->str:
         return pathlib.Path(get_tile_image_path(self)).name
+    
+    def get_dataset_type(self)->shared.enums.DatasetType:
+        return self.roi.whole_slide_image.case.patient.dataset_type
+    
+    def get_wsi_path(self)->pathlib.Path:
+        return self.roi.whole_slide_image.path

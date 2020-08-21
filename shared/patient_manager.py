@@ -8,8 +8,19 @@ from typing import List, Callable, Tuple
 import pathlib
 from pathlib import Path
 Path.ls = lambda x: [p for p in list(x.iterdir()) if '.ipynb_checkpoints' not in p.name]
+import functools
+from sklearn.model_selection import StratifiedKFold, KFold
+from shared.enums import DatasetType
+from shared import roi
 
-class PatientManager:    
+##
+# rest of the imports from shared is at the end of the document to solve circular dependency problem
+# https://stackoverflow.com/questions/894864/circular-dependency-in-python
+##
+
+
+class PatientManager:
+    
     patients:List[Patient] = None
     
     def __init__(self):
@@ -35,19 +46,26 @@ class PatientManager:
                             to a list ob labels
         """
         
+        # empty the lists, in case this function is called multiple times
+        self.patients = []
+        for ts in tilesummaries:
+            for roi in ts.rois:
+                roi.tiles = []
+        
         #key: patient_id; value: Patient object
-        patients = {}
+        patient_id_to_patient = {}
         for tilesummary in tilesummaries:
             ###
             # patient
             ###
             current_patient = None
             patient_id = patient_id_getter(tilesummary.wsi_path)
-            if(patient_id not in patients.keys()):
-                current_patient = Patient(patient_id=patient_id, PatientManager=self)
-                patients.append(current_patient)
+            if(patient_id not in patient_id_to_patient.keys()):
+                current_patient = Patient(patient_id=patient_id, patient_manager=self)
+                patient_id_to_patient[patient_id] = current_patient
+                self.patients.append(current_patient)
             else:
-                current_patient = patients[patient_id]
+                current_patient = patient_id_to_patient[patient_id]
             
             ###
             # case
@@ -66,21 +84,23 @@ class PatientManager:
             # whole-slide
             ###
             slide_id = slide_id_getter(tilesummary.wsi_path)
-            current_slide = WholeSlideImage(slide_id=slide_id, case=current_case)
+            current_slide = WholeSlideImage(slide_id=slide_id, case=current_case, path=tilesummary.wsi_path)
             current_case.whole_slide_images.append(current_slide)
             
             ###
             # regions of interest
             ###
             rois = tilesummary.rois
+            
             assert (rois != None and len(rois) > 0)
             for roi in rois:
+                current_slide.regions_of_interest.append(roi)
                 roi.whole_slide_image = current_slide
                 roi.labels = labels_getter(tilesummary.wsi_path, roi)
-                for tile in tilesummary.top_tiles:
-                    tile.labels = labels
+                for tile in tilesummary.top_tiles():               
                     if(tile.roi.roi_id == roi.roi_id):
                         roi.tiles.append(tile)
+                        tile.labels = roi.labels
             
     
     def create_from_whole_slide_images(self, 
@@ -104,7 +124,7 @@ class PatientManager:
             slide_id_getter: method that maps from the whole-slide image path
                              and RegionOfInterestDefinedByCoordinates object to a slide id
         """
-        pass
+        raise NotImplementedError()
     
     def create_from_preextracted_regions_of_interest(self, 
                                        paths:List[pathlib.Path],
@@ -121,10 +141,10 @@ class PatientManager:
             case_id_getter: method that maps from the roi path to a case id
             slide_id_getter: method that maps from the roi path to a slide id
         """
-        pass
+        raise NotImplementedError()
     
     def create_from_preextracted_tiles(self, 
-                                       paths:List[pathlib.Path],
+                                       tile_paths:List[pathlib.Path],
                                         patient_id_getter:Callable, 
                                         case_id_getter:Callable, 
                                         slide_id_getter:Callable, 
@@ -137,20 +157,26 @@ class PatientManager:
             patient_id_getter: method that maps from the tile image path to a patient id
             case_id_getter: method that maps from the tile image path to a case id
             slide_id_getter: method that maps from the tile image path to a slide id
+            labels_getter: function that maps from a tile_path to the tile's labels
         """
+        
+        # empty the list, in case this function is called multiple times
+        self.patients = []
+        
         #key: patient_id; value: Patient object
-        patients = {}
+        patient_id_to_patient = {}
         for tile_path in tile_paths:
             ###
             # patient
             ###
             current_patient = None
             patient_id = patient_id_getter(tile_path)
-            if(patient_id not in patients.keys()):
-                current_patient = Patient(patient_id=patient_id, PatientManager=self)
-                patients.append(current_patient)
+            if(patient_id not in patient_id_to_patient.keys()):
+                current_patient = Patient(patient_id=patient_id, patient_manager=self)
+                patient_id_to_patient[patient_id] = current_patient
+                self.patients.append(current_patient)
             else:
-                current_patient = patients[patient_id]
+                current_patient = patient_id_to_patient[patient_id]
             
             ###
             # case
@@ -183,8 +209,101 @@ class PatientManager:
             ###
             current_roi = None
             if(len(current_slide.regions_of_interest) == 0):
-                current_roi = RegionOfInterestDummy(slide_id, current_slide)
+                current_roi = roi.RegionOfInterestDummy(slide_id, current_slide)
                 current_slide.regions_of_interest.append(current_roi)
             else:
                 current_roi = current_slide.regions_of_interest[0]
-            current_roi.tiles.append(tile_path)
+            tile = Tile(roi=current_roi, tile_path=tile_path, labels=labels_getter(tile_path))
+            current_roi.tiles.append(tile)
+            
+            
+
+    def split(self, splitter:Callable):
+        """
+        Convenience function that splits the patients into a train and a validation set and sets the dataset_type attribute of every 
+        patient in self.patients using the split provided by "splitter".
+        
+        Arguments:
+            splitter: a Callable, that takes the following input parameters (e.g. sklearn.model_selection.train_test_split):
+                                    set of patient ids
+
+                                    and returns two lists:
+                                       list of patient ids for training
+                                       list of patient ids for validation
+        """
+
+        patient_ids = [patient.patient_id for patient in self.patients]
+        
+        # sorting ensures a reproduceable split of the ids. If the same ids are given in a different order to the method,
+        # without sorting it would result in a different split, even if random_state is the the same (and numpy.random.seed()).
+        patient_ids.sort()
+        
+        ids_train, ids_val = splitter(list(set(patient_ids)))              
+        for patient in self.patients:
+            if(patient.patient_id in ids_val):
+                patient.dataset_type = DatasetType.validation
+            elif(patient.patient_id in ids_train):
+                patient.dataset_type = DatasetType.train
+            else:
+                assert False
+                
+                
+    def __split_KFold_cross_validation(self, 
+                                       patient_ids:List[str],
+                                       n_splits:int,
+                                       current_iteration:int,
+                                       random_state:int,
+                                       shuffle:bool)->List[List[str]]:
+        # sorting ensures a reproduceable split of the ids. If the same ids are given in a different order to the method,
+        # without sorting it would result in a different split, even if random_state is the the same (and numpy.random.seed()).
+        patient_ids.sort()        
+        kf = KFold(n_splits=n_splits, random_state=random_state, shuffle=shuffle)
+        splits = list(kf.split(patient_ids))
+        split_current_iteration = list(splits)[current_iteration]
+        train_indices = split_current_iteration[0]
+        val_indices = split_current_iteration[1]
+        ids_train = [patient_ids[i] for i in train_indices]
+        ids_val = [patient_ids[i] for i in val_indices]
+        return ids_train, ids_val 
+
+    def split_KFold_cross_validation(self, n_splits:int, current_iteration:int, random_state:int, shuffle:bool):   
+        """
+        Arguments:
+            n_splits: number of splits == the k in k-fold
+            current_iteration: index of the current split; e.g.: if you want to perform 5-fold crossvalidation, 
+                                this parameter might be between [0,4]
+            random_state: integer value, a random seed. If you keep this the same, the splitting will be 
+                         consistent and always the same.
+            shuffle: boolean value that indicates, if the ids should be shuffled before splitting
+
+        """
+        if current_iteration < 0 or current_iteration >= n_splits:
+            raise ValueError(f'current_iteration must be in [0, {n_splits-1}]  (between 0 and n_splits-1)')
+            
+        splitter = functools.partial(self.__split_KFold_cross_validation, 
+                                     n_splits=n_splits, 
+                                     current_iteration=current_iteration, 
+                                     random_state=random_state, 
+                                     shuffle=shuffle)
+        self.split(splitter)
+
+
+    def get_all_tiles(self)->List[shared.tile.Tile]:
+        """
+            Convenience function that gets all tiles.
+        """
+        all_tiles = []
+        for patient in self.patients:
+            for case in patient.cases:
+                for wsi in case.whole_slide_images:
+                    for roi in wsi.regions_of_interest:
+                        for tile in roi.tiles:
+                            all_tiles.append(tile) 
+        return all_tiles
+
+    
+                    
+from .patient import Patient
+from .case import Case
+from .wsi import WholeSlideImage
+from .tile import Tile
