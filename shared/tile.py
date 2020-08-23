@@ -1,5 +1,7 @@
 from __future__ import annotations #https://stackoverflow.com/questions/33837918/type-hints-solve-circular-dependency
 
+from typing import List, Callable, Tuple, Dict
+
 import pathlib
 from pathlib import Path
 Path.ls = lambda x: [p for p in list(x.iterdir()) if '.ipynb_checkpoints' not in p.name]
@@ -47,6 +49,8 @@ class Tile:
     roi:RegionOfInterest = None
     tile_path = None
     labels = None
+    predictions_raw:Dict = None # predicted probability for each class
+    labels_one_hot_encoded = None
                 
     def __init__(self, 
                  tile_summary=None, 

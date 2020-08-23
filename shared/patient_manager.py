@@ -291,19 +291,27 @@ class PatientManager:
                                      shuffle=shuffle)
         self.split(splitter)
 
-
-    def get_all_tiles(self)->List[shared.tile.Tile]:
-        """
-            Convenience function that gets all tiles.
-        """
-        all_tiles = []
+    
+    def __get_tiles(self, dataset_type:shared.enums.DatasetType):
+        tls = []
         for patient in self.patients:
             for case in patient.cases:
                 for wsi in case.whole_slide_images:
                     for roi in wsi.regions_of_interest:
                         for tile in roi.tiles:
-                            all_tiles.append(tile) 
-        return all_tiles
+                            if(dataset_type == None or tile.get_dataset_type() == dataset_type):
+                                tls.append(tile)
+                            
+        return tls
+    
+    def get_all_tiles(self)->List[shared.tile.Tile]:
+        """
+            Convenience function that gets all tiles.
+        """
+        return self.__get_tiles(dataset_type = None)
+    
+    def get_tiles(self, dataset_type:shared.enums.DatasetType)->List[shared.tile.Tile]:
+        return self.__get_tiles(dataset_type = dataset_type)
 
     
                     
