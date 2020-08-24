@@ -9,6 +9,8 @@ Path.ls = lambda x: [p for p in list(x.iterdir()) if '.ipynb_checkpoints' not in
 from enum import Enum
 from tile_extraction import tiles
 from tiles import *
+import numpy
+import numpy as np
 
 
 
@@ -48,9 +50,9 @@ class Tile:
     real_scale_factor = None
     roi:RegionOfInterest = None
     tile_path = None
-    labels = None
-    predictions_raw:Dict = None # predicted probability for each class
+    labels = None # y true
     labels_one_hot_encoded = None
+    predictions_raw:Dict[str,float] = None # key: class name; value: predicted probability
                 
     def __init__(self, 
                  tile_summary=None, 
@@ -180,3 +182,15 @@ class Tile:
     
     def get_wsi_path(self)->pathlib.Path:
         return self.roi.whole_slide_image.path
+    
+    def calculate_predictions_ohe(self, thresholds:Dict[str, float])->numpy.ndarray:
+        """
+        Calculates predictions based on the given thresholds after the predictions_raw had been set.
+        Arguments:
+        
+        Returns:
+            1-d numpy array representing one hot encoded predictions.
+        """
+        assert self.predictions_raw != None
+        assert list(self.predictions_raw.keys()) == list(thresholds.keys())
+        return (np.array(list(self.predictions_raw.values())) >= np.array(list(thresholds.values()))).astype(np.int0)

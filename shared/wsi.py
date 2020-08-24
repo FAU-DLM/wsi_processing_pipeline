@@ -2,6 +2,8 @@ from __future__ import annotations #https://stackoverflow.com/questions/33837918
 
 
 from shared.case import Case
+import typing
+from typing import Dict
 
 
 class WholeSlideImage:
@@ -9,11 +11,18 @@ class WholeSlideImage:
     regions_of_interest:List[RegionOfInterest] = None
     slide_id:str = None
     path:pathlib.Path = None
+    predictions_raw:Dict[str, float] = None # key: class name; value: tiles with that class / all tiles
+    predictions_thresh:Dict[str, bool] = None # key: class name; value: bool
       
     def __init__(self, slide_id:str, case:Case, path=None):
-        self.region_of_interests = []
         self.case = case
         self.slide_id = slide_id
         self.path = path
         self.regions_of_interest = []
         
+    def get_tiles(self)-> List[shared.tile.Tile]:
+        tls = []
+        for roi in self.regions_of_interest:
+            for tile in roi.tiles:
+                tls.append(tile)
+        return tls

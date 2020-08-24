@@ -314,6 +314,8 @@ class PatientManager:
         return self.__get_tiles(dataset_type = dataset_type)
 
     
+    def get_patients(self, dataset_type:shared.enums.DatasetType)->List[shared.patient.Patient]:
+        return [p for p in self.patients if p.dataset_type == dataset_type]
                     
 from .patient import Patient
 from .case import Case
