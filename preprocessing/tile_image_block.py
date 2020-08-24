@@ -1,13 +1,13 @@
 import fastai
 from fastai.vision.all import *
 import wsi_processing_pipeline
-from wsi_processing_pipeline.shared import slide, filter, tiles, util
+from wsi_processing_pipeline.tile_extraction import slide, filter, tiles, util
 from wsi_processing_pipeline.preprocessing.name_getter import NameGetter
 from wsi_processing_pipeline.preprocessing.objects import NamedObject
 import shared
 
 
-class TileImage(Tuple):
+class TileImage(fastuple):
     '''
     This class creates a TensorImage from a wsi_processing_pipeline.shared.tiles.Tile object.
     additionally the show method enables to display the Tile object as an image
@@ -43,7 +43,7 @@ def label_tl_image(f):
     return f.classification_labels
                     
 
-def tile_image(tl:wsi_processing_pipeline.shared.tiles.Tile)->fastai.vision.data.Image:
+def tile_image(tl:wsi_processing_pipeline.tile_extraction.tiles.Tile)->fastai.vision.data.Image:
     '''
     This function is just for showcasing.
     It takes a tile object (wsi-preprocessing pipeline) and returns a WsiImage for displaying purposes 
@@ -55,7 +55,7 @@ class TileTransform(Transform):
     ''' A subclass of fastai Transform. Takes a TileObject and applies the image transform as taking tile object and returning 
     WsiImage aka PIL Image transformation.
     '''
-    def __init__(self, tl:wsi_processing_pipeline.shared.tiles.Tile, splits):
+    def __init__(self, tl:wsi_processing_pipeline.tile_extraction.tiles.Tile, splits):
         self.tl= tl
        
     def encodes(self,f):                  
