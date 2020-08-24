@@ -1,6 +1,6 @@
 import pathlib
-import fastai2
-from fastai2.vision.all import *
+import fastai
+from fastai.vision.all import *
 from tqdm import tqdm
 import scandir
 from typing import Dict
@@ -58,13 +58,13 @@ class FilesGetter():
                         if re.compile(pattern).search(p) and not re.compile(fr'{os.path.sep}(\.)').search(p):                               
                             res.append(Path(str(p)))
                             if get_files:
-                                fls += fastai2.data.transforms._get_files(p, f, suffix)                  
+                                fls += fastai.data.transforms._get_files(p, f, suffix)                  
                     
                 else:
                     if not p.startswith('.') and not re.compile(fr'{os.path.sep}(\.)').search(p):
                         res.append(Path(p))
                         if get_files:
-                            fls += fastai2.data.transforms._get_files(p, f, suffix)               
+                            fls += fastai.data.transforms._get_files(p, f, suffix)               
       
         else:                    
             res = [Path(o.path) for o in os.scandir(path) if o.is_dir() and not o.name.startswith('.')]            
@@ -73,7 +73,7 @@ class FilesGetter():
             
             if get_files:
                 fs = [o.name for o in os.scandir(path) if o.is_file()]
-                fls += fastai2.data.transforms._get_files(path, fs, suffix)
+                fls += fastai.data.transforms._get_files(path, fs, suffix)
         
                     
         if get_files and not get_dirs:

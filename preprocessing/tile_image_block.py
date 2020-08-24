@@ -1,5 +1,5 @@
-import fastai2
-from fastai2.vision.all import *
+import fastai
+from fastai.vision.all import *
 import wsi_processing_pipeline
 from wsi_processing_pipeline.tile_extraction import slide, filter, tiles, util
 from wsi_processing_pipeline.preprocessing.name_getter import NameGetter
@@ -36,14 +36,14 @@ class TileImage(Tuple):
         else: t = img
         #line = t.new_zeros(t.shape[0], t.shape[1], 10)
         #print(type(t))
-        return fastai2.torch_core.show_image(t,title=title, ctx=ctx, **kwargs)   
+        return fastai.torch_core.show_image(t,title=title, ctx=ctx, **kwargs)   
 
 def label_tl_image(f): 
     print(type(f))
     return f.classification_labels
                     
 
-def tile_image(tl:wsi_processing_pipeline.tile_extraction.tiles.Tile)->fastai2.vision.data.Image:
+def tile_image(tl:wsi_processing_pipeline.tile_extraction.tiles.Tile)->fastai.vision.data.Image:
     '''
     This function is just for showcasing.
     It takes a tile object (wsi-preprocessing pipeline) and returns a WsiImage for displaying purposes 
@@ -84,7 +84,7 @@ def TileImageBlock():
 #            return name    
 #
 #def wsi_image(tl:wsi_processing_pipeline.tile_extraction.tiles.Tile,                           
-#                          )->fastai2.vision.data.Image:
+#                          )->fastai.vision.data.Image:
 #            '''This function is just for showcasing.
 #            It takes a tile object (wsi-preprocessing pipeline) and returns a WsiImage for displaying purposes '''
 #                       

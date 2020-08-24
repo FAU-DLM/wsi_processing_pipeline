@@ -5,7 +5,7 @@ if typing.TYPE_CHECKING:
     from .patient import Patient
 
 
-import fastai2
+import fastai
 
 
 from typing import List, Callable, Tuple
@@ -18,18 +18,18 @@ from shared.enums import DatasetType
 import preprocessing
 
 class Predictor:  
-    learner:fastai2.learner.Learner = None
+    learner:fastai.learner.Learner = None
     patient_manager: shared.patient_manager.PatientManager
     
     def __init__(self, 
-                 learner:fastai2.learner.Learner,
+                 learner:fastai.learner.Learner,
                  patient_manager:shared.patient_manager.PatientManager):
         """
         Arguments:
             This is a convenience class for mapping predictions on tile level to corresponding predictions on whole-slide
             image and case level.
                
-            learner: fastai2 learner used for prediction
+            learner: fastai learner used for prediction
             patient_manager: 
         """
         if learner == None:
@@ -40,7 +40,7 @@ class Predictor:
         self.learner = learner
         self.patient_manager = patient_manager
     
-    def __predict(self, dataloader:fastai2.data.core.TfmdDL):
+    def __predict(self, dataloader:fastai.data.core.TfmdDL):
         return self.learner.get_preds(ds_idx=-1, 
                                  dl=dataloader, 
                                  with_input=False, 
@@ -51,11 +51,11 @@ class Predictor:
                            pred_type:shared.enums.PredictionType,
                            dataset_type:shared.enums.DatasetType,
                            tile_size:int, 
-                           batch_size:int)->typing.Tuple[fastai2.data.core.DataLoaders, List[shared.tile.Tile]]:
+                           batch_size:int)->typing.Tuple[fastai.data.core.DataLoaders, List[shared.tile.Tile]]:
         block_x = None
         get_x = None
         if(pred_type == shared.enums.PredictionType.preextracted_tiles):
-            block_x = fastai2.vision.data.ImageBlock
+            block_x = fastai.vision.data.ImageBlock
             get_x = lambda x: x.tile_path
             
         elif(pred_type == shared.enums.PredictionType.tiles_on_the_fly):
@@ -65,13 +65,13 @@ class Predictor:
         else:
             assert False
             
-        data_pred = fastai2.data.block.DataBlock(
-        blocks=(block_x, fastai2.data.block.MultiCategoryBlock),
+        data_pred = fastai.data.block.DataBlock(
+        blocks=(block_x, fastai.data.block.MultiCategoryBlock),
         get_x=get_x, 
         get_y=lambda x: x.labels,
         # all tiles that shall be predicted will be in the train dataset => split func has to return false for them
-        splitter=fastai2.data.transforms.FuncSplitter(lambda x: not(x.get_dataset_type() == dataset_type)),
-        item_tfms = fastai2.vision.augment.Resize(tile_size),
+        splitter=fastai.data.transforms.FuncSplitter(lambda x: not(x.get_dataset_type() == dataset_type)),
+        item_tfms = fastai.vision.augment.Resize(tile_size),
         batch_tfms=[])
         tiles_to_predict = [t for t in self.patient_manager.get_all_tiles() if t.get_dataset_type() == dataset_type]        
         return data_pred.dataloaders(tiles_to_predict, bs=batch_size).train, tiles_to_predict
@@ -79,7 +79,7 @@ class Predictor:
     def __set_preds(self, 
                     predictions:typing.Tuple[torch.Tensor, torch.Tensor], 
                     tiles_to_predict:List[shared.tile.Tile], 
-                    vocab:fastai2.data.transforms.CategoryMap):
+                    vocab:fastai.data.transforms.CategoryMap):
         """
             sets the predictions for every shared.tile.Tile object
             
@@ -168,7 +168,7 @@ class Predictor:
         
         
         
-#import fastai2
+#import fastai
 #import wsi_processing_pipeline
 #from wsi_processing_pipeline.preprocessing.objects import NamedObject
 #import pandas as pd
@@ -176,20 +176,20 @@ class Predictor:
 #class Predictor(object):
 #    
 #    def __init__(self, 
-#                 learner:fastai2.learner.Learner,                  
+#                 learner:fastai.learner.Learner,                  
 #                 path, 
 #                 tta:bool=False,
 #                 thresh:float=0.5, 
 #                 exclude_failed:bool=False, 
-#                 dl:fastai2.data.core.TfmdDL=None):
+#                 dl:fastai.data.core.TfmdDL=None):
 #        
-#        if learner is None or not isinstance(learner, fastai2.learner.Learner):            
-#            raise AssertionError('please make sure to use a "fastai2.learner.Learner" as "learner" input') 
+#        if learner is None or not isinstance(learner, fastai.learner.Learner):            
+#            raise AssertionError('please make sure to use a "fastai.learner.Learner" as "learner" input') 
 #        
-#        if dl is not None and not isinstance(dl, fastai2.data.core.TfmdDL):        
-#            raise AssertionError('please make sure to use a "fastai2.data.core.TfmdDL" as dataloader - dl - input')
+#        if dl is not None and not isinstance(dl, fastai.data.core.TfmdDL):        
+#            raise AssertionError('please make sure to use a "fastai.data.core.TfmdDL" as dataloader - dl - input')
 #        
-#        elif dl is not None and isinstance(dl, fastai2.data.core.TfmdDL):
+#        elif dl is not None and isinstance(dl, fastai.data.core.TfmdDL):
 #            self.dl = dl
 #            self.ds = dl.dataset
 #        
@@ -205,7 +205,7 @@ class Predictor:
 #        self.thresh=thresh
 #        self.exclude_failed=exclude_failed
 #                        
-#        self.cat = fastai2.data.transforms.Categorize(vocab=self.ds.vocab)
+#        self.cat = fastai.data.transforms.Categorize(vocab=self.ds.vocab)
 #        self.ds_items_checker()
 #
 #       

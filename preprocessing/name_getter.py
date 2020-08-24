@@ -1,8 +1,8 @@
 from typing import Dict, Union, List, Callable
 
 import pathlib
-import fastai2
-from fastai2.vision.all import *
+import fastai
+from fastai.vision.all import *
 from tqdm import tqdm
 import scandir
 import fastcore
