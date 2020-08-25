@@ -46,7 +46,7 @@ class Predictor:
                                  dl=dataloader, 
                                  with_input=False, 
                                  with_decoded=False, 
-                                 reorder=True, )
+                                 reorder=True)
     
     def __build_dataloader(self, 
                            pred_type:shared.enums.PredictionType,
@@ -74,8 +74,13 @@ class Predictor:
         splitter=fastai.data.transforms.FuncSplitter(lambda x: not(x.get_dataset_type() == dataset_type)),
         item_tfms = fastai.vision.augment.Resize(tile_size),
         batch_tfms=[])
-        tiles_to_predict = [t for t in self.patient_manager.get_all_tiles() if t.get_dataset_type() == dataset_type]        
-        return data_pred.dataloaders(tiles_to_predict, bs=batch_size).train, tiles_to_predict
+        tiles_to_predict = [t for t in self.patient_manager.get_all_tiles() if t.get_dataset_type() == dataset_type]
+        dataloader = data_pred.dataloaders(tiles_to_predict, bs=batch_size).train
+        #https://forums.fast.ai/t/get-preds-returns-smaller-than-expected-tensor/47519
+        dataloader.drop_last = False
+        dataloader.shuffle = False
+        
+        return dataloader, tiles_to_predict
     
     def __set_preds(self, 
                     predictions:typing.Tuple[torch.Tensor, torch.Tensor], 
@@ -296,6 +301,7 @@ class Predictor:
                          self.calculate_predictions_for_one_wsi(wsi=wsi, 
                                                        thresholds_tile_level=thresholds_tile_level, 
                                                        thresholds_higher_level=thresholds_higher_level)
+    
 
 
 
