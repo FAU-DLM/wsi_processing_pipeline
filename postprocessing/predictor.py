@@ -17,6 +17,7 @@ Path.ls = lambda x: [p for p in list(x.iterdir()) if '.ipynb_checkpoints' not in
 import shared
 from shared.enums import DatasetType
 import preprocessing
+import pandas as pd
 
 class Predictor:  
     learner:fastai.learner.Learner = None
@@ -74,13 +75,14 @@ class Predictor:
         splitter=fastai.data.transforms.FuncSplitter(lambda x: not(x.get_dataset_type() == dataset_type)),
         item_tfms = fastai.vision.augment.Resize(tile_size),
         batch_tfms=[])
-        tiles_to_predict = [t for t in self.patient_manager.get_all_tiles() if t.get_dataset_type() == dataset_type]
+        tiles_to_predict = self.patient_manager.get_tiles(dataset_type = dataset_type)
         dataloader = data_pred.dataloaders(tiles_to_predict, bs=batch_size).train
         #https://forums.fast.ai/t/get-preds-returns-smaller-than-expected-tensor/47519
         dataloader.drop_last = False
         dataloader.shuffle = False
         
         return dataloader, tiles_to_predict
+    
     
     def __set_preds(self, 
                     predictions:typing.Tuple[torch.Tensor, torch.Tensor], 
@@ -301,6 +303,57 @@ class Predictor:
                          self.calculate_predictions_for_one_wsi(wsi=wsi, 
                                                        thresholds_tile_level=thresholds_tile_level, 
                                                        thresholds_higher_level=thresholds_higher_level)
+    
+    def export_dataframe(self, 
+                         dataset_type:shared.enums.DatasetType, 
+                         level:shared.enums.DataframeLevel)->pd.DataFrame:
+        """
+        Creates a dataframe for all patients from the specified dataset type with their saved predictions.
+        Arguments:
+            dataset_type:
+            level:
+        Returns:
+            pandas.Dataframe
+        """
+       
+        df = pd.DataFrame()
+               
+        if(level == shared.enums.DataframeLevel.case_level):
+            for patient in self.patient_manager.get_patients(dataset_type=dataset_type):
+                for case in patient.cases:
+                    preds = []
+                    for Class, bool_value in case.predictions_thresh.items():
+                        if(bool_value):
+                            preds.append(Class)
+                            
+                    df = df.append({'patient id' : patient.patient_id, 
+                               'case id' : case.case_id,
+                               'labels' : case.get_labels(),
+                               'predictions' : preds, 
+                               'predictions (tiles with class/all tiles)' : case.predictions_raw}, 
+                              ignore_index=True)
+                    
+        elif(level == shared.enums.DataframeLevel.slide_level):
+            for patient in self.patient_manager.get_patients(dataset_type=dataset_type):
+                for case in patient.cases:
+                    for wsi in case.whole_slide_images:
+                        preds = []
+                        for Class, bool_value in wsi.predictions_thresh.items():
+                            if(bool_value):
+                                preds.append(Class)
+                            
+                        df = df.append({'patient id' : patient.patient_id, 
+                                   'case id' : case.case_id,
+                                   'slide id' : wsi.slide_id,
+                                   'labels' : wsi.get_labels(),
+                                   'predictions' : preds, 
+                                   'predictions (tiles with class/all tiles)' : wsi.predictions_raw}, 
+                                  ignore_index=True)
+        
+        else:
+            assert False
+        
+        return df
     
 
 

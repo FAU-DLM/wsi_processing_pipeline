@@ -14,3 +14,7 @@ class TissueQuantity(Enum):
 class PredictionType(Enum):
     preextracted_tiles = 0
     tiles_on_the_fly = 1
+    
+class DataframeLevel(Enum):
+    case_level = 0
+    slide_level = 1
