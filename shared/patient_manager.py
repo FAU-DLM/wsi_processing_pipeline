@@ -10,6 +10,7 @@ from pathlib import Path
 Path.ls = lambda x: [p for p in list(x.iterdir()) if '.ipynb_checkpoints' not in p.name]
 import functools
 from sklearn.model_selection import StratifiedKFold, KFold
+import shared
 from shared.enums import DatasetType
 from shared import roi
 
@@ -299,7 +300,7 @@ class PatientManager:
                 for wsi in case.whole_slide_images:
                     for roi in wsi.regions_of_interest:
                         for tile in roi.tiles:
-                            if(dataset_type == None or tile.get_dataset_type() == dataset_type):
+                            if(dataset_type == shared.enums.DatasetType.all or tile.get_dataset_type() == dataset_type):
                                 tls.append(tile)
                             
         return tls
@@ -308,14 +309,14 @@ class PatientManager:
         """
             Convenience function that gets all tiles.
         """
-        return self.__get_tiles(dataset_type = None)
+        return self.__get_tiles(dataset_type = shared.enums.DatasetType.all)
     
     def get_tiles(self, dataset_type:shared.enums.DatasetType)->List[shared.tile.Tile]:
         return self.__get_tiles(dataset_type = dataset_type)
 
     
     def get_patients(self, dataset_type:shared.enums.DatasetType)->List[shared.patient.Patient]:
-        return [p for p in self.patients if(p.dataset_type == dataset_type)]
+        return [p for p in self.patients if(dataset_type == shared.enums.DatasetType.all or p.dataset_type == dataset_type)]
                     
 from .patient import Patient
 from .case import Case

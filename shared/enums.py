@@ -3,6 +3,7 @@ class DatasetType(Enum):
     train = 0
     validation = 1
     test = 2
+    all = 3 
     
     
 class TissueQuantity(Enum):
