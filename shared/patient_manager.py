@@ -315,7 +315,7 @@ class PatientManager:
 
     
     def get_patients(self, dataset_type:shared.enums.DatasetType)->List[shared.patient.Patient]:
-        return [p for p in self.patients if p.dataset_type == dataset_type]
+        return [p for p in self.patients if(p.dataset_type == dataset_type)]
                     
 from .patient import Patient
 from .case import Case
