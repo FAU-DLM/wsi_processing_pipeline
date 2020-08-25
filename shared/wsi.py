@@ -26,3 +26,13 @@ class WholeSlideImage:
             for tile in roi.tiles:
                 tls.append(tile)
         return tls
+    
+    def get_labels(self)-> List[Union[str, int]]:
+        """
+        iterates over all its associated tiles and returns a list of all found classes
+        """
+        labels = []
+        for t in self.get_tiles():
+            for l in t.labels:
+                labels.append(l)
+        return list(set(labels))
