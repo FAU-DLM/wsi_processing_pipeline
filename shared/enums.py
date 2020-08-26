@@ -19,3 +19,8 @@ class PredictionType(Enum):
 class DataframeLevel(Enum):
     case_level = 0
     slide_level = 1
+    
+class EvaluationLevel(Enum):
+    tile = 0
+    slide = 1
+    case = 2
