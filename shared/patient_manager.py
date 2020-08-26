@@ -300,7 +300,7 @@ class PatientManager:
                 for wsi in case.whole_slide_images:
                     for roi in wsi.regions_of_interest:
                         for tile in roi.tiles:
-                            if(dataset_type == shared.enums.DatasetType.all or tile.get_dataset_type() == dataset_type):
+                            if((dataset_type == shared.enums.DatasetType.all) or (tile.get_dataset_type() == dataset_type)):
                                 tls.append(tile)
                             
         return tls
@@ -313,7 +313,6 @@ class PatientManager:
     
     def get_tiles(self, dataset_type:shared.enums.DatasetType)->List[shared.tile.Tile]:
         return self.__get_tiles(dataset_type = dataset_type)
-
     
     def get_patients(self, dataset_type:shared.enums.DatasetType)->List[shared.patient.Patient]:
         return [p for p in self.patients if(dataset_type == shared.enums.DatasetType.all or p.dataset_type == dataset_type)]
