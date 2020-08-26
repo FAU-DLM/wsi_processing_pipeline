@@ -293,15 +293,18 @@ class PatientManager:
         self.split(splitter)
 
     
+    def get_patients(self, dataset_type:shared.enums.DatasetType)->List[shared.patient.Patient]:
+        return [p for p in self.patients if((dataset_type == shared.enums.DatasetType.all) or (p.dataset_type == dataset_type))]
+    
+    
     def __get_tiles(self, dataset_type:shared.enums.DatasetType):
         tls = []
-        for patient in self.patients:
+        for patient in self.get_patients(dataset_type=dataset_type):
             for case in patient.cases:
                 for wsi in case.whole_slide_images:
                     for roi in wsi.regions_of_interest:
                         for tile in roi.tiles:
-                            if((dataset_type == shared.enums.DatasetType.all) or (tile.get_dataset_type() == dataset_type)):
-                                tls.append(tile)
+                            tls.append(tile)
                             
         return tls
     
@@ -313,9 +316,26 @@ class PatientManager:
     
     def get_tiles(self, dataset_type:shared.enums.DatasetType)->List[shared.tile.Tile]:
         return self.__get_tiles(dataset_type = dataset_type)
+        
+    def get_wsis(self, dataset_type:shared.enums.DatasetType)->List[shared.wsi.WholeSlideImage]:
+        wsis = []
+        for patient in self.get_patients(dataset_type=dataset_type):
+            for case in patient.cases:
+                for wsi in case.whole_slide_images:
+                    wsis.append(wsi)
+                            
+        return wsis
     
-    def get_patients(self, dataset_type:shared.enums.DatasetType)->List[shared.patient.Patient]:
-        return [p for p in self.patients if(dataset_type == shared.enums.DatasetType.all or p.dataset_type == dataset_type)]
+    def get_cases(self, dataset_type:shared.enums.DatasetType)->List[shared.case.Case]:
+        cases = []
+        for patient in self.get_patients(dataset_type=dataset_type):
+            for case in patient.cases:
+                cases.append(case)
+                            
+        return cases
+    
+    
+    
                     
 from .patient import Patient
 from .case import Case
