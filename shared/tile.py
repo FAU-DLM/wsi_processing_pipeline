@@ -50,7 +50,7 @@ class Tile:
     real_scale_factor = None
     roi:RegionOfInterest = None
     tile_path = None
-    labels = None # y true
+    labels:List[Union[str,int]] = None # y true
     labels_one_hot_encoded = None
     predictions_raw:Dict[str,float] = None # key: class name; value: predicted probability
     predictions_thresh:Dict[str, bool] = None # key: class name; value: bool
@@ -195,3 +195,6 @@ class Tile:
         assert self.predictions_raw != None
         assert list(self.predictions_raw.keys()) == list(thresholds.keys())
         return (np.array(list(self.predictions_raw.values())) >= np.array(list(thresholds.values()))).astype(np.int0)
+    
+    def get_labels(self)->List[Union[str,int]]:
+        return self.labels
