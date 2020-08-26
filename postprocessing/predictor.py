@@ -22,7 +22,7 @@ from tqdm import tqdm
 
 class Predictor:  
     learner:fastai.learner.Learner = None
-    patient_manager: shared.patient_manager.PatientManager
+    patient_manager: shared.patient_manager.PatientManager = None
     
     def __init__(self, 
                  learner:fastai.learner.Learner,
