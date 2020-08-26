@@ -13,6 +13,8 @@ from sklearn.model_selection import StratifiedKFold, KFold
 import shared
 from shared.enums import DatasetType
 from shared import roi
+import numpy as np
+import sklearn
 
 ##
 # rest of the imports from shared is at the end of the document to solve circular dependency problem
@@ -217,15 +219,15 @@ class PatientManager:
             tile = Tile(roi=current_roi, tile_path=tile_path, labels=labels_getter(tile_path))
             current_roi.tiles.append(tile)
             
-            
-
-    def split(self, splitter:Callable):
+    
+    
+    def split_by_function(self, splitter:Callable):
         """
-        Convenience function that splits the patients into a train and a validation set and sets the dataset_type attribute of every 
+        Splits the patients into a train, validation and test set and sets the dataset_type attribute of every 
         patient in self.patients using the split provided by "splitter".
         
         Arguments:
-            splitter: a Callable, that takes the following input parameters (e.g. sklearn.model_selection.train_test_split):
+            splitter: a Callable, that takes the following input parameters:
                                     set of patient ids
 
                                     and returns three lists:
@@ -250,7 +252,81 @@ class PatientManager:
                 patient.dataset_type = DatasetType.test
             else:
                 assert False
+    
+    
+    def __split(self, patient_ids:List[str], train_size:float, validation_size:float, test_size:float, random_state:int):
+        """
+        Convencience function that splits the patients randomly into a train, validation and test set 
+        according to the given sizes.
+        
+        Arguments:
+            train_size: in range (0,1]
+            validation_size: [0, 1)
+            test_size: [0,1]
+            random_seed: 
+        """
+        # checks
+        if(train_size <= 0 or train_size > 1):
+            raise ValueError("train_size must be in range (0,1]")        
+        if(validation_size < 0 or validation_size >= 1):
+            raise ValueError("validation_size must be in range [0, 1)")
+        if(test_size < 0 or test_size > 1):
+            raise ValueError("test_size must be in range [0,1]")
+        if(train_size + validation_size + test_size != 1):
+            raise ValueError("train_size, validation_size and test_size must add up to 1")
+        
+        np.random.seed(random_state) 
                 
+        # edge cases
+        if(validation_size <= 0 and test_size <= 0):
+            return patient_ids, [], []
+        if(test_size <= 0):
+            train_ids, val_ids = sklearn.model_selection.train_test_split(patient_ids, 
+                                                            train_size=train_size, 
+                                                            #test_size=validation_size, #not necessary
+                                                            random_state=random_state, 
+                                                            shuffle=True, 
+                                                            stratify=None)
+            return train_ids, val_ids, []
+        
+        else:
+            train_and_val_ids, test_ids = sklearn.model_selection.train_test_split(patient_ids, 
+                                                            train_size=train_size+validation_size, 
+                                                            test_size=test_size, 
+                                                            random_state=random_state, 
+                                                            shuffle=True, 
+                                                            stratify=None)
+            #update train_size to get the train_size of all patient_ids
+            train_size = train_size/(1-test_size)
+            train_ids, val_ids = sklearn.model_selection.train_test_split(patient_ids, 
+                                                            train_size=train_size, 
+                                                            #test_size=1-train_size, #not necessary
+                                                            random_state=random_state, 
+                                                            shuffle=True, 
+                                                            stratify=None)
+            return train_ids, val_ids, test_ids
+        
+    
+    
+    def split(self, train_size:float, validation_size:float, test_size:float, random_state:int):
+        """
+        Convencience function that splits the patients randomly into a train, validation and test set 
+        according to the given sizes.
+        
+        Arguments:
+            train_size: in range (0,1]
+            validation_size: [0, 1)
+            test_size: [0,1]
+            random_state: a random seed that can be set to get consistent splits 
+        """
+        
+        splitter = functools.partial(self.__split, 
+                                     train_size=train_size, 
+                                     validation_size=validation_size,
+                                     test_size=test_size,
+                                     random_state=random_state)
+        self.split_by_function(splitter)
+    
                 
     def __split_KFold_cross_validation(self, 
                                        patient_ids:List[str],
@@ -258,9 +334,12 @@ class PatientManager:
                                        current_iteration:int,
                                        random_state:int,
                                        shuffle:bool)->List[List[str]]:
+        np.random.seed(random_state)      
+        
         # sorting ensures a reproduceable split of the ids. If the same ids are given in a different order to the method,
         # without sorting it would result in a different split, even if random_state is the the same (and numpy.random.seed()).
-        patient_ids.sort()        
+        patient_ids.sort()
+              
         kf = KFold(n_splits=n_splits, random_state=random_state, shuffle=shuffle)
         splits = list(kf.split(patient_ids))
         split_current_iteration = list(splits)[current_iteration]
@@ -290,7 +369,7 @@ class PatientManager:
                                      current_iteration=current_iteration, 
                                      random_state=random_state, 
                                      shuffle=shuffle)
-        self.split(splitter)
+        self.split_by_function(splitter)
 
     
     def get_patients(self, dataset_type:shared.enums.DatasetType)->List[shared.patient.Patient]:
