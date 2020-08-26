@@ -53,6 +53,7 @@ class Tile:
     labels = None # y true
     labels_one_hot_encoded = None
     predictions_raw:Dict[str,float] = None # key: class name; value: predicted probability
+    predictions_thresh:Dict[str, bool] = None # key: class name; value: bool
                 
     def __init__(self, 
                  tile_summary=None, 

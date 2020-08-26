@@ -90,7 +90,7 @@ class Predictor:
                     tiles_to_predict:List[shared.tile.Tile], 
                     vocab:fastai.data.transforms.CategoryMap):
         """
-            sets the predictions for every shared.tile.Tile object
+            sets the raw predictions (== predicted probabilities for each class) for every shared.tile.Tile object
             
             Arguments:
                 predictions: result of learner.get_preds(ds_idx=1, with_input=False, with_decoded=False)
@@ -112,7 +112,7 @@ class Predictor:
                 tiles_to_predict[i].labels_one_hot_encoded = y_true_one_hot_encoded[i]
             preds_dict = {}
             for n, Class in enumerate(vocab):
-                preds_dict[Class] = preds_raw[i][n]
+                preds_dict[Class] = preds_raw[i][n].item()
             tiles_to_predict[i].predictions_raw = preds_dict
             
     def __buildDl_predict_set_preds(self, 
@@ -135,7 +135,8 @@ class Predictor:
                                       tile_size:int, 
                                       batch_size:int):
         """
-        Raw predictions will be saved in each Tile object in the attribute "predictions_raw".
+        Raw predictions (== predicted probabilities for each class) will be saved in each Tile object 
+        in the attribute "predictions_raw". No thresholds are applied here.
         
         Arguments:
             prediction_type: - preextracted_tiles => use this, if the patient manager uses tiles, that have already been
@@ -159,6 +160,25 @@ class Predictor:
         
     def get_classes(self):
         return self.learner.dls.vocab
+    
+    
+    
+    def calculate_predictions_for_one_tile(self, 
+                                           tile:shared.tile.Tile, 
+                                           thresholds:Dict[str, float]):
+        """
+        After predict_on_tiles was called, this functions applies the given thresholds to calculate the predicted classes
+        and stores it into the tile's predictions_thresh attribute.
+        """
+        # checks
+        for c in self.get_classes():
+            if(c not in thresholds.keys()):
+                raise ValueError(f'{c} missing in the thresholds_tile_level dictionary\'s keys')
+                
+        predictions_thresh = {}
+        for Class in thresholds.keys():
+            predictions_thresh[Class] = tile.predictions_raw[Class] >= thresholds[Class]
+        tile.predictions_thresh = predictions_thresh
     
     
     def __calculate_predictions_for_one_wsi_or_case(self, 
@@ -278,8 +298,8 @@ class Predictor:
                                                   thresholds_tile_level:Dict[str, float], 
                                                   thresholds_higher_level:Dict[str, float]):
         """
-        After predict_on_tiles was called, this functions uses the predictions on tile level to calculate predictions up
-        to the case level using the given thresholds.
+        After predict_on_tiles was called, this functions applies the given thresholds to calculate predictions for tiles,
+        slides and cases.
         Arguments:
             dataset_type: only patients from that dataset will taken into account
             thresholds: dictionary with the class names as key (class names can be obtained with self.get_classes()) and
@@ -303,6 +323,9 @@ class Predictor:
                     self.calculate_predictions_for_one_wsi(wsi=wsi, 
                                                        thresholds_tile_level=thresholds_tile_level, 
                                                        thresholds_higher_level=thresholds_higher_level)
+                    for roi in wsi.regions_of_interest:
+                        for tile in roi.tiles:
+                            self.calculate_predictions_for_one_tile(tile=tile, thresholds=thresholds_tile_level)
     
     def export_dataframe(self, 
                          dataset_type:shared.enums.DatasetType, 
@@ -369,6 +392,9 @@ class Predictor:
         loads the associated model weights and makes predictions
         on the associated validation set the specific model was not trained on. So in the end you have predictions
         for the complete dataset but always with a model that had not been trained on the data used for prediction.
+        Raw predictions (== predicted probabilities for each class) will be saved in each Tile object 
+        in the attribute "predictions_raw". No thresholds are applied here.
+        
         
         Arguments:
             k: the k in k-fold
