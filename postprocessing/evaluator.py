@@ -2,12 +2,13 @@ import typing
 from typing import List, Callable, Tuple, Dict, Union
 
 import postprocessing
-import sklearn
-from sklearn.metrics import roc_curve, auc, roc_auc_score
 import shared
 
-import postprocessing
 import sklearn
+from sklearn.metrics import roc_curve, auc, roc_auc_score
+import matplotlib.pyplot as plt
+import numpy as np
+
 class Evaluator:
     predictor:postprocessing.predictor.Predictor = None
     def __init__(self, predictor:postprocessing.predictor.Predictor):
