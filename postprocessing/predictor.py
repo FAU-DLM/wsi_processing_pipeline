@@ -6,6 +6,7 @@ if typing.TYPE_CHECKING:
 
 
 import fastai
+import numpy
 import numpy as np
 
 
@@ -109,7 +110,7 @@ class Predictor:
         
         for i in range(0, len(tiles_to_predict)):
             if(y_true_one_hot_encoded != None):
-                tiles_to_predict[i].labels_one_hot_encoded = y_true_one_hot_encoded[i]
+                tiles_to_predict[i].labels_one_hot_encoded = numpy.array(y_true_one_hot_encoded[i]).astype(np.int0)
             preds_dict = {}
             for n, Class in enumerate(vocab):
                 preds_dict[Class] = preds_raw[i][n].item()
