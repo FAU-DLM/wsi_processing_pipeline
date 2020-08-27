@@ -1,6 +1,7 @@
 from __future__ import annotations #https://stackoverflow.com/questions/33837918/type-hints-solve-circular-dependency
 
-
+import numpy
+import numpy as np
 from shared.case import Case
 import typing
 from typing import Dict
@@ -36,3 +37,30 @@ class WholeSlideImage:
             for l in t.labels:
                 labels.append(l)
         return list(set(labels))
+    
+    def get_predictions_one_hot_encoded(self)->numpy.ndarray:
+        """
+            Returns:
+                numpy array with one hot encoded labels
+        """
+        return np.array(list(self.predictions_thresh.values())).astype(np.int0)
+    
+    def get_labels_one_hot_encoded(self, vocab = None)->numpy.ndarray:
+        """
+            Arguments:
+                vocab: A list of the used classes. It is very important that the order is the same as in 
+                        learner.dls.vocab. The default value only works, if predict_on_tiles() has already been called.
+            Returns:
+                numpy array with one hot encoded labels
+        """
+        if(vocab == None and self.predictions_raw == None):
+            raise ValueError('Either specify a vocab (e.g. learner.dls.vocab) or call Predictor.predict_on_tiles())')
+        elif(vocab == None):
+            vocab = self.predictions_raw.keys()
+        
+        labels_one_hot_encoded = np.zeros(len(vocab))
+        labels_list = self.get_labels()
+        for n, Class in enumerate(vocab):
+            if(Class in labels_list):
+                labels_one_hot_encoded[n] = 1
+        return labels_one_hot_encoded.astype(np.int0)

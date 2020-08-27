@@ -51,7 +51,7 @@ class Tile:
     roi:RegionOfInterest = None
     tile_path = None
     labels:List[Union[str,int]] = None # y true
-    labels_one_hot_encoded = None
+    labels_one_hot_encoded:numpy.ndarray = None
     predictions_raw:Dict[str,float] = None # key: class name; value: predicted probability
     predictions_thresh:Dict[str, bool] = None # key: class name; value: bool
                 
@@ -198,3 +198,18 @@ class Tile:
     
     def get_labels(self)->List[Union[str,int]]:
         return self.labels
+    
+    def get_predictions_one_hot_encoded(self)->numpy.ndarray:
+        """
+            Returns:
+                numpy array with one hot encoded labels
+        """
+        return np.array(list(self.predictions_thresh.values())).astype(np.int0)
+    
+    def get_labels_one_hot_encoded(self)->numpy.ndarray:
+        """
+            Returns:
+                numpy array with one hot encoded labels
+        """
+        return np.array(self.labels_one_hot_encoded).astype(np.int0)
+    
