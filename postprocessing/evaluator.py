@@ -6,6 +6,8 @@ import sklearn
 from sklearn.metrics import roc_curve, auc, roc_auc_score
 import shared
 
+import postprocessing
+import sklearn
 class Evaluator:
     predictor:postprocessing.predictor.Predictor = None
     def __init__(self, predictor:postprocessing.predictor.Predictor):
@@ -132,3 +134,62 @@ class Evaluator:
             pyplot.ylabel('Frequency')
             pyplot.xlabel('Predicted Probability')
             pyplot.show()
+    
+    
+    def __get_y_true_and_y_pred(self, 
+                                level:shared.enums.EvaluationLevel, 
+                                dataset_type:shared.enums.DatasetType):
+        
+        objs = self.__get_objects_according_to_evaluation_level(level=level, dataset_type=dataset_type)
+        
+        y_true = []
+        y_pred = []
+        for obj in objs:
+            y_true.append(obj.get_labels_one_hot_encoded())
+            y_pred.append(obj.get_predictions_one_hot_encoded())
+        
+        return y_true, y_pred
+    
+    
+    def confusion_matrix(self, 
+                        level:shared.enums.EvaluationLevel, 
+                        dataset_type:shared.enums.DatasetType):
+        y_true, y_pred = self.__get_y_true_and_y_pred(level=level, dataset_type=dataset_type)
+        cms = sklearn.metrics.multilabel_confusion_matrix(y_true=y_true, 
+                                                         y_pred=y_pred)
+            
+        return cms
+    
+    
+    def plot_confusion_matrix(self, 
+                              level:shared.enums.EvaluationLevel, 
+                              dataset_type:shared.enums.DatasetType):
+        cms = self.confusion_matrix(level=level, dataset_type=dataset_type)
+        vocab = self.predictor.get_classes()
+        for n, cm in enumerate(cms):
+            fig = plt.figure()
+            plt.imshow(cm, interpolation='nearest', cmap='Blues')
+            plt.title(vocab[n])
+            tick_marks = np.arange(2)
+            plt.xticks(tick_marks, ['positive','negative'], rotation=90)
+            plt.yticks(tick_marks, ['positive','negative'], rotation=0)
+            plt.tight_layout()
+            plt.ylabel('Actual')
+            plt.xlabel('Predicted')
+            plt.grid(False)
+            
+            for row in range(cm.shape[0]):
+                for col in range(cm.shape[1]):
+                    thresh = cm.max() / 2.
+                    plt.text(x = col, 
+                             y = row, 
+                             s=cm[row][col], 
+                             horizontalalignment="center", 
+                             verticalalignment="center", 
+                             color="white" if cm[row, col] > thresh else "black")
+    
+    def classification_report(self, 
+                              level:shared.enums.EvaluationLevel, 
+                              dataset_type:shared.enums.DatasetType):
+        y_true, y_pred = self.__get_y_true_and_y_pred(level=level, dataset_type=dataset_type)
+        print(sklearn.metrics.classification_report(y_true,y_pred))
