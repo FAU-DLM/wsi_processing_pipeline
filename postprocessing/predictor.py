@@ -49,7 +49,8 @@ class Predictor:
                                  dl=dataloader, 
                                  with_input=False, 
                                  with_decoded=False, 
-                                 reorder=True)
+                                 reorder=True, 
+                                 with_loss=True)
     
     def __build_dataloader(self, 
                            pred_type:shared.enums.PredictionType,
@@ -98,7 +99,7 @@ class Predictor:
                                 Tuple with raw predictions at first place
                 vocab: dataloader.vocab == list of classes in the order they appear in the predictions
         """
-        assert len(predictions) == 2
+        assert len(predictions) == 3
         
         preds_raw = predictions[0]
         
@@ -115,6 +116,7 @@ class Predictor:
             for n, Class in enumerate(vocab):
                 preds_dict[Class] = preds_raw[i][n].item()
             tiles_to_predict[i].predictions_raw = preds_dict
+            tiles_to_predict[i].loss = predictions[2][i].item()
             
     def __buildDl_predict_set_preds(self, 
                                     pred_type:shared.enums.PredictionType.preextracted_tiles, 
