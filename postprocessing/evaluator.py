@@ -4,6 +4,7 @@ from typing import List, Callable, Tuple, Dict, Union
 import postprocessing
 import shared
 
+from tqdm import tqdm
 import sklearn
 from sklearn.metrics import roc_curve, auc, roc_auc_score
 import matplotlib.pyplot as plt
@@ -52,7 +53,7 @@ class Evaluator:
         """
         # tiles, slides or cases according to the specified EvaluationLevel
         objs = self.__get_objects_according_to_evaluation_level(level=level, dataset_type=dataset_type)
-         
+        
         #key:class; value: number of correct predictions
         n_correctly_predicted = {}
         for Class in self.predictor.get_classes():
