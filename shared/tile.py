@@ -14,6 +14,9 @@ import numpy as np
 
 
 
+import PIL
+import os
+
 class Tile:
     """
     Class for information about a tile.
@@ -183,7 +186,7 @@ class Tile:
         return self.roi.whole_slide_image.case.patient.dataset_type
     
     def get_wsi_path(self)->pathlib.Path:
-        return self.roi.whole_slide_image.path
+        return self.tile_summary.wsi_path
     
     def calculate_predictions_ohe(self, thresholds:Dict[str, float])->numpy.ndarray:
         """
@@ -213,4 +216,16 @@ class Tile:
                 numpy array with one hot encoded labels
         """
         return np.array(self.labels_one_hot_encoded).astype(np.int0)
-    
+        
+    def get_pil_image(self)->PIL.PngImagePlugin.PngImageFile:
+        # tile is saved to disc => just open it
+        if(self.tile_path != None and os.path.exists(tp)):
+            return PIL.Image.open(self.tile_path)
+        # tile needs to be extracted from its corresponding wsi (or preextracted roi)
+        else:
+            return tiles.ExtractTileFromWSI(path=self.get_wsi_path(), 
+                                             x=self.get_x(), 
+                                             y=self.get_y(), 
+                                             width=self.get_width(), 
+                                             height=self.get_height(), 
+                                             level=self.level)
