@@ -794,6 +794,7 @@ def save_display_tile(tile, save, display):
     if not os.path.exists(dir):
       os.makedirs(dir)
     tile_pil_img.save(img_path)
+    tile.tile_path = img_path
     #print("%-20s | Time: %-14s  Name: %s" % ("Save Tile", str(t.elapsed()), img_path))
 
   if display:
