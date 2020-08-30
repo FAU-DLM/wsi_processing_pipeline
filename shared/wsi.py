@@ -21,6 +21,12 @@ class WholeSlideImage:
         self.path = path
         self.regions_of_interest = []
         
+    def __str__(self):
+        return self.slide_id
+
+    def __repr__(self):
+        return "\n" + self.__str__()
+        
     def get_tiles(self)-> List[shared.tile.Tile]:
         tls = []
         for roi in self.regions_of_interest:

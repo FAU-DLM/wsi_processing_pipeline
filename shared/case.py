@@ -22,6 +22,12 @@ class Case:
         self.case_id = case_id
         self.patient = patient
         
+    def __str__(self):
+        return self.case_id
+
+    def __repr__(self):
+        return "\n" + self.__str__()
+        
     def get_tiles(self)-> List[shared.tile.Tile]:
         tls = []
         for wsi in self.whole_slide_images:

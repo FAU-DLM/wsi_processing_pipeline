@@ -123,9 +123,15 @@ class Tile:
 
     def __str__(self):
         if(self.tile_path != None):
-            return str(self.tile_path)
+            return str(self.tile_path.name)
         else:
-            return "[Tile #%d, Row #%d, Column #%d, Tissue %4.2f%%, Score %0.4f]" % (
+            wsi_name = None
+            try:
+                wsi_name = self.tile_summary.wsi_path.name
+            except:
+                wsi_name = 'to be set'
+                
+            return f'wsi: {wsi_name}; '+"[Tile #%d, Row #%d, Column #%d, Tissue %4.2f%%, Score %0.4f]" % (
               self.tile_num, self.r, self.c, self.tissue_percentage, self.score)
 
     def __repr__(self):
