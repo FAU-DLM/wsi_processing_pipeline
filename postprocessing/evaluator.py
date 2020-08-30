@@ -12,10 +12,10 @@ import numpy
 import numpy as np
 import fastai
 import fastcore
-
-#https://stackoverflow.com/questions/26873127/show-dataframe-as-table-in-ipython-notebook
-#from IPython.display import display, HTML
 import math
+import sklearn
+import pandas
+import pandas as pd
 
 class Evaluator:
     predictor:postprocessing.predictor.Predictor = None
@@ -347,8 +347,104 @@ class Evaluator:
         ###
         ncols = 4
         nrows = math.ceil(k/ncols)
-        tile_images = [t.get_pil_image() for t in patient_manager.get_all_tiles()[:k]]
+        tile_images = [t.get_pil_image() for t in self.predictor.patient_manager.get_all_tiles()[:k]]
         figures = {}
         for n, img in enumerate(tile_images):
             figures[n] = img
         self.__plot_figures(figures=figures, nrows=nrows, ncols=ncols)
+    
+    def __calculate_metric(self, 
+                            obj:Union[shared.case.Case, 
+                            shared.wsi.WholeSlideImage, 
+                            shared.tile.Tile], 
+                            metric:Callable)->float:
+        """
+        Arguments:
+            obj: shared.case.Case or shared.wsi.WholeSlideImage or shared.tile.Tile 
+            metric: Callable that takes y_pred and y_true as arguments
+        """
+        y_pred = list(obj.predictions_raw.values())
+        y_true = obj.get_labels_one_hot_encoded()
+        return metric(y_pred=y_pred, y_true=y_true)
+        
+    
+    def get_orderd_by_metric(self, 
+                          dataset_type:shared.enums.DatasetType, 
+                          level:shared.enums.EvaluationLevel, 
+                          k:int = 10, 
+                          metric:Callable=sklearn.metrics.mean_absolute_error, 
+                          descending:bool = True)->List[Union[shared.case.Case, 
+                                                                shared.wsi.WholeSlideImage, 
+                                                                shared.tile.Tile]]:
+        """
+        This method compares the real labels with the predicted probabilities and returns the k cases/slides/tiles 
+        (depending on level) where the predicted probabilities differ the most/least 
+        (depending on "descending") from the real labels using metric.
+        Example for standard value metric = sklearn.metrics.mean_absolute_error:
+            two classes: A and B
+            a case/slide/tile with the target [0,1] and the predicted probabilities of [0.2, 0.8]
+            Difference between reality and prediction is now calculated the following way:
+            (abs(0-0.2)+abs(1-0.8))/2
+            
+        Arguments:
+            dataset_type:
+            level:
+            k: number of objects to return
+            metric: metric to order the objects
+            descending:
+        Returns:
+            The k objects with the highest metric values
+        """
+        objs = self.__get_objects_according_to_evaluation_level(dataset_type=dataset_type, level=level)
+        for obj in objs:
+            obj.metric = self.__calculate_metric(obj=obj, metric=metric)
+        objs.sort(key=lambda o: o.metric, reverse=descending)
+        return objs[:k]
+    
+    def get_df_of_k_top_ordered_by_metric(self, 
+                                          dataset_type:shared.enums.DatasetType, 
+                                          level:shared.enums.EvaluationLevel, 
+                                          k:int = 10, 
+                                          metric:Callable=sklearn.metrics.mean_absolute_error, 
+                                          descending:bool = True)->pandas.DataFrame:
+        """
+        This method compares the real labels with the predicted probabilities and returns the k cases/slides/tiles 
+        (depending on level) where the predicted probabilities differ the most/least 
+        (depending on "descending") from the real labels using metric.
+        Example for standard value metric = sklearn.metrics.mean_absolute_error:
+            two classes: A and B
+            a case/slide/tile with the target [0,1] and the predicted probabilities of [0.2, 0.8]
+            Difference between reality and prediction is now calculated the following way:
+            (abs(0-0.2)+abs(1-0.8))/2
+            
+        Arguments:
+            dataset_type:
+            level:
+            k: number of objects to return
+            metric: metric to order the objects
+            descending:
+        Returns:
+            a dataframe with information about the k objects with the highest metric values
+        """
+        objs = self.get_orderd_by_metric(dataset_type=dataset_type, 
+                                         level=level, 
+                                         k=k, 
+                                         metric=metric, 
+                                         descending=descending)
+        ###
+        # dataframe
+        ###
+        level_name = str(level).split('.')[1]
+        df = pd.DataFrame(columns=[level_name, 'target', 'predicted', 'probabilities', 'metric'])
+        for o in objs:
+            predicted = []
+            for Class, bool_value in o.predictions_thresh.items():
+                if(bool_value):
+                    predicted.append(Class)
+            df = df.append({level_name:o,  
+                            'target':o.get_labels(), 
+                            'predicted':predicted, 
+                           'probabilities':o.predictions_raw, 
+                           'metric':o.metric}, 
+                           ignore_index=True)
+        return df
