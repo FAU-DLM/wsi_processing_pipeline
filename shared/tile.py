@@ -219,7 +219,7 @@ class Tile:
         
     def get_pil_image(self)->PIL.PngImagePlugin.PngImageFile:
         # tile is saved to disc => just open it
-        if(self.tile_path != None and os.path.exists(tp)):
+        if(self.tile_path != None and os.path.exists(self.tile_path)):
             return PIL.Image.open(self.tile_path)
         # tile needs to be extracted from its corresponding wsi (or preextracted roi)
         else:
