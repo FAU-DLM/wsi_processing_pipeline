@@ -13,6 +13,10 @@ import numpy as np
 import fastai
 import fastcore
 
+#https://stackoverflow.com/questions/26873127/show-dataframe-as-table-in-ipython-notebook
+#from IPython.display import display, HTML
+import math
+
 class Evaluator:
     predictor:postprocessing.predictor.Predictor = None
     def __init__(self, predictor:postprocessing.predictor.Predictor):
@@ -279,3 +283,72 @@ class Evaluator:
                     x_dec.show(ctx=ax)
                     ax.imshow(cam_map.detach().cpu(), alpha=0.6, extent=(0,512,512,0),
                               interpolation='bilinear', cmap='magma');
+    
+    def get_tiles_with_top_losses(self, 
+                                  dataset_type:shared.enums.DatasetType, 
+                                  k:int = 10, 
+                                  descending:bool = True)->List[shared.tile.Tile]:
+        """
+        Returns the k tiles from the specified dataset with the highest or if descending == False with the lowest loss.
+        """
+        tls = self.predictor.patient_manager.get_tiles(dataset_type = dataset_type)
+        tls.sort(key=lambda tile: tile.loss, reverse=descending)
+        return tls[:k]
+    
+    
+    def __plot_figures(self, figures, nrows, ncols, figsize=(18,18)):
+        # https://stackoverflow.com/questions/11159436/multiple-figures-in-a-single-window
+        """Plot a dictionary of figures.
+    
+        Parameters
+        ----------
+        figures : <title, figure> dictionary
+        ncols : number of columns of subplots wanted in the display
+        nrows : number of rows of subplots wanted in the figure
+        """
+    
+        fig, axeslist = plt.subplots(ncols=ncols, nrows=nrows, figsize=figsize)
+
+        for i in range(0, nrows*ncols):
+            if(i < len(figures)):
+                axeslist.ravel()[i].imshow(list(figures.values())[i], cmap=plt.gray())
+                axeslist.ravel()[i].set_title(list(figures.keys())[i])
+            axeslist.ravel()[i].set_axis_off()
+        plt.subplots_adjust(left = None, bottom=None, right=None, top=None, wspace=None, hspace=None)
+    
+    def plot_top_losses(self, dataset_type:shared.enums.DatasetType, k:int = 10, descending:bool = True):
+        """
+        Plots the k tiles from the specified dataset with the highest or if descending == False with the lowest loss.
+        """
+        tls = self.get_tiles_with_top_losses(dataset_type=dataset_type, k=k, descending=descending)
+        
+        ###
+        # dataframe
+        ###
+        df = pd.DataFrame(columns=['patient', 'slide', 'target', 'predicted', 'probabilities', 'loss'])
+        for t in tls:
+            predicted = []
+            for Class, bool_value in t.predictions_thresh.items():
+                if(bool_value):
+                    predicted.append(Class)
+            df = df.append({'patient':t.roi.whole_slide_image.case.patient.patient_id, 
+                       'slide':t.roi.whole_slide_image.slide_id, 
+                       'target':t.labels, 
+                       'predicted':predicted, 
+                       'probabilities':t.predictions_raw, 
+                       'loss':t.loss}, ignore_index=True)
+        fastai.torch_core.display_df(df)
+        # Alternative 
+        #https://stackoverflow.com/questions/26873127/show-dataframe-as-table-in-ipython-notebook
+        #from IPython.display import display, HTML
+        
+        ###
+        # images
+        ###
+        ncols = 4
+        nrows = math.ceil(k/ncols)
+        tile_images = [t.get_pil_image() for t in patient_manager.get_all_tiles()[:k]]
+        figures = {}
+        for n, img in enumerate(tile_images):
+            figures[n] = img
+        self.__plot_figures(figures=figures, nrows=nrows, ncols=ncols)
