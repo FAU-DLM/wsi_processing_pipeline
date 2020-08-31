@@ -8,6 +8,7 @@ Path.ls = lambda x: [p for p in list(x.iterdir()) if '.ipynb_checkpoints' not in
 
 from enum import Enum
 from tile_extraction import tiles
+from tile_extraction.tiles import *
 from tiles import *
 import numpy
 import numpy as np
@@ -42,7 +43,7 @@ class Tile:
     o_c_s = None #(=original_column_start)
     o_c_e = None #(=original_column_end)
     
-    t_p = None #tissue percentage
+    tissue_percentage = None #tissue percentage
     color_factor = None
     s_and_v_factor = None
     quantity_factor = None
@@ -74,7 +75,7 @@ class Tile:
                  o_r_e=None, 
                  o_c_s=None,
                  o_c_e=None, 
-                 t_p=None, 
+                 t_p=None, #tissue_percentage
                  color_factor=None, 
                  s_and_v_factor=None, 
                  quantity_factor=None, 
