@@ -1,5 +1,9 @@
 from __future__ import annotations #https://stackoverflow.com/questions/33837918/type-hints-solve-circular-dependency
 
+import sys
+sys.path.append('../')
+sys.path.append('../tile_extraction/')
+
 from typing import List, Callable, Tuple, Dict
 
 import pathlib
@@ -7,13 +11,11 @@ from pathlib import Path
 Path.ls = lambda x: [p for p in list(x.iterdir()) if '.ipynb_checkpoints' not in p.name]
 
 from enum import Enum
+import tile_extraction
 from tile_extraction import tiles
-from tile_extraction.tiles import *
 from tiles import *
 import numpy
 import numpy as np
-
-
 
 import PIL
 import os
@@ -142,22 +144,22 @@ class Tile:
         return 100 - self.tissue_percentage
 
     def tissue_quantity(self):
-        return tissue_quantity(self.tissue_percentage)
+        return tiles.tissue_quantity(self.tissue_percentage)
 
     def get_pil_tile(self):
-        return tile_to_pil_tile(self)
+        return tiles.tile_to_pil_tile(self)
 
     def get_np_tile(self):
-        return tile_to_np_tile(self)
+        return tiles.tile_to_np_tile(self)
 
     def save_tile(self):
-        save_display_tile(self, save=True, display=False)
+        tiles.save_display_tile(self, save=True, display=False)
 
     def display_tile(self):
-        save_display_tile(self, save=False, display=True)
+        tiles.save_display_tile(self, save=False, display=True)
 
     def display_with_histograms(self):
-        display_tile(self, rgb_histograms=True, hsv_histograms=True)
+        tiles.display_tile(self, rgb_histograms=True, hsv_histograms=True)
 
     def get_np_scaled_filtered_tile(self):
         return self.np_scaled_filtered_tile
@@ -184,10 +186,10 @@ class Tile:
         return self.o_r_s
     
     def get_path(self)->pathlib.Path:
-        return pathlib.Path(get_tile_image_path(self))
+        return pathlib.Path(tiles.get_tile_image_path(self))
                   
     def get_name(self)->str:
-        return pathlib.Path(get_tile_image_path(self)).name
+        return pathlib.Path(tiles.get_tile_image_path(self)).name
     
     def get_dataset_type(self)->shared.enums.DatasetType:
         return self.roi.whole_slide_image.case.patient.dataset_type
