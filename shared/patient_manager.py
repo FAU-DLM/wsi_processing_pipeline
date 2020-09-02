@@ -412,7 +412,24 @@ class PatientManager:
                 cases.append(case)
                             
         return cases
-    
+   
+    def __get_objects_according_to_evaluation_level(self, 
+                                                    level:shared.enums.EvaluationLevel, 
+                                                    dataset_type:shared.enums.DatasetType) \
+                                                    ->List[Union[shared.tile.Tile, \
+                                                                 shared.wsi.WholeSlideImage, \
+                                                                 shared.case.Case]]:
+        objs = None
+        if(level == shared.enums.EvaluationLevel.tile):
+            objs = self.get_tiles(dataset_type = dataset_type)
+        elif(level == shared.enums.EvaluationLevel.slide):
+            objs = self.get_wsis(dataset_type=dataset_type)
+        elif(level == shared.enums.EvaluationLevel.case):
+            objs = self.get_cases(dataset_type=dataset_type)
+        else:
+            raise ValueError('Wrong value for level.')
+            
+        return objs
     
     
                     
