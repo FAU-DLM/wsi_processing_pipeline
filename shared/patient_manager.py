@@ -413,7 +413,7 @@ class PatientManager:
                             
         return cases
    
-    def __get_objects_according_to_evaluation_level(self, 
+    def get_objects_according_to_evaluation_level(self, 
                                                     level:shared.enums.EvaluationLevel, 
                                                     dataset_type:shared.enums.DatasetType) \
                                                     ->List[Union[shared.tile.Tile, \
@@ -431,6 +431,41 @@ class PatientManager:
             
         return objs
     
+    def get_classes(self)->List[str]:
+        classes = set()
+        for t in self.get_all_tiles():
+            for l in t.get_labels():
+                classes.add(l)
+        return sorted(list(classes))
+    
+    def get_class_distribution(self, 
+                               level:shared.enums.EvaluationLevel, 
+                               dataset_type:shared.enums.DatasetType)->(Dict[str, int], Dict[str, float]):
+        """
+        Arguments:
+            level: 
+            dataset_type:
+        Returns:
+            total amount of cases/slides/tiles (depending on level) in the dataset (depending on dataset_type) 
+            and two dictionaries with the class names as keys:
+                1st: values == absolute numbers of cases/slides/tiles (depending on level) with that class as label 
+                2nd: values == percentage of cases/slides/tiles (depending on level) with that class as label 
+        """
+        classes = self.get_classes()
+        dict_class_to_n = {}
+        for c in classes:
+            dict_class_to_n[c] = 0
+        
+        objs = self.get_objects_according_to_evaluation_level(level=level, dataset_type=dataset_type)
+        for obj in objs:
+            for l in obj.get_labels():
+                dict_class_to_n[l] +=1
+        
+        dict_class_to_percentage = {}
+        for Class, n in dict_class_to_n.items():
+            dict_class_to_percentage[Class] = dict_class_to_n[Class]/len(objs)
+        
+        return len(objs), dict_class_to_n, dict_class_to_percentage
     
                     
 from .patient import Patient
