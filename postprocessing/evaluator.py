@@ -28,9 +28,18 @@ class Evaluator:
                                                     dataset_type:shared.enums.DatasetType) \
                                                     ->List[Union[shared.tile.Tile, \
                                                                  shared.wsi.WholeSlideImage, \
-                                                                 shared.case.Case]]:    
-        return self.predictor.patient_manager.__get_objects_according_to_evaluation_level(level=level, 
-                                                                                          dataset_type=dataset_type)
+                                                                 shared.case.Case]]:
+        objs = None
+        if(level == shared.enums.EvaluationLevel.tile):
+            objs = self.predictor.patient_manager.get_tiles(dataset_type = dataset_type)
+        elif(level == shared.enums.EvaluationLevel.slide):
+            objs = self.predictor.patient_manager.get_wsis(dataset_type=dataset_type)
+        elif(level == shared.enums.EvaluationLevel.case):
+            objs = self.predictor.patient_manager.get_cases(dataset_type=dataset_type)
+        else:
+            raise ValueError('Wrong value for level.')
+            
+        return objs
     
     
     def calculate_accuracy_per_class(self, 
