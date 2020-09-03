@@ -33,7 +33,6 @@ import PIL
 from PIL import Image, ImageDraw, ImageFont
 from enum import Enum
 import openslide
-import multiprocessing
 from typing import List, Callable, Union, Dict, Tuple, Union
 from tqdm import tqdm
 import pandas
