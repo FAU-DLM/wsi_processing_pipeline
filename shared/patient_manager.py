@@ -15,6 +15,10 @@ from shared.enums import DatasetType
 from shared import roi
 import numpy as np
 import sklearn
+import random
+from tqdm import tqdm
+import multiprocessing
+from hashlib import sha256
 
 ##
 # rest of the imports from shared is at the end of the document to solve circular dependency problem
@@ -22,13 +26,31 @@ import sklearn
 ##
 
 
+###### module methods ######
+
+#needs to be on the top level of the module to be pickled in multiprocessing pool
+#https://stackoverflow.com/questions/8804830/python-multiprocessing-picklingerror-cant-pickle-type-function
+def remove_object(patient_manager:shared.patient_manager.PatientManager, 
+                    obj:Union[shared.tile.Tile, shared.wsi.WholeSlideImage, shared.case.Case])->bool:
+    if(isinstance(obj, shared.tile.Tile)):
+        return obj, patient_manager.remove_tile(tile = obj)
+    if(isinstance(obj, shared.wsi.WholeSlideImage)):
+        return obj, patient_manager.remove_slide(wsi = obj)
+    if(isinstance(obj, shared.case.Case)):
+        return obj, patient_manager.remove_case(case = obj)
+    
+    raise ValueError(f'obj is of the wrong type. Its type is {type(obj)}')            
+            
+
 class PatientManager:
+    
+
     
     patients:List[Patient] = None
     
     def __init__(self):
         self.patients = []
-        
+    
     def create_from_tilesummaries(self, 
                                   tilesummaries:List[tile_extraction.tiles.TileSummary], 
                                   patient_id_getter:Callable, 
@@ -221,7 +243,7 @@ class PatientManager:
             
     
     
-    def split_by_function(self, splitter:Callable):
+    def split_by_function(self, splitter:Callable, random_state:int):
         """
         Splits the patients into a train, validation and test set and sets the dataset_type attribute of every 
         patient in self.patients using the split provided by "splitter".
@@ -236,13 +258,14 @@ class PatientManager:
                                        list of patient ids for the test set
         """
 
-        patient_ids = [patient.patient_id for patient in self.patients]
+        np.random.seed(random_state)
+        random.seed(random_state)
         
         # sorting ensures a reproduceable split of the ids. If the same ids are given in a different order to the method,
         # without sorting it would result in a different split, even if random_state is the the same (and numpy.random.seed()).
-        patient_ids.sort()
-        
-        ids_train, ids_val, ids_test = splitter(list(set(patient_ids)))              
+        patient_ids = sorted(list(set([patient.patient_id for patient in self.patients])))
+                
+        ids_train, ids_val, ids_test = splitter(patient_ids)              
         for patient in self.patients:
             if(patient.patient_id in ids_val):
                 patient.dataset_type = DatasetType.validation
@@ -275,8 +298,13 @@ class PatientManager:
         if(train_size + validation_size + test_size != 1):
             raise ValueError("train_size, validation_size and test_size must add up to 1")
         
-        np.random.seed(random_state) 
-                
+        np.random.seed(random_state)
+        random.seed(random_state)
+        
+        # sorting ensures a reproduceable split of the ids. If the same ids are given in a different order to the method,
+        # without sorting it would result in a different split, even if random_state is the the same (and numpy.random.seed()).
+        patient_ids.sort()
+        
         # edge cases
         if(validation_size <= 0 and test_size <= 0):
             return patient_ids, [], []
@@ -319,13 +347,15 @@ class PatientManager:
             test_size: [0,1]
             random_state: a random seed that can be set to get consistent splits 
         """
+        np.random.seed(random_state)
+        random.seed(random_state)
         
         splitter = functools.partial(self.__split, 
                                      train_size=train_size, 
                                      validation_size=validation_size,
                                      test_size=test_size,
                                      random_state=random_state)
-        self.split_by_function(splitter)
+        self.split_by_function(splitter, random_state)
     
                 
     def __split_KFold_cross_validation(self, 
@@ -334,7 +364,8 @@ class PatientManager:
                                        current_iteration:int,
                                        random_state:int,
                                        shuffle:bool)->List[List[str]]:
-        np.random.seed(random_state)      
+        np.random.seed(random_state)
+        random.seed(random_state)
         
         # sorting ensures a reproduceable split of the ids. If the same ids are given in a different order to the method,
         # without sorting it would result in a different split, even if random_state is the the same (and numpy.random.seed()).
@@ -361,6 +392,10 @@ class PatientManager:
             shuffle: boolean value that indicates, if the ids should be shuffled before splitting
 
         """
+        
+        np.random.seed(random_state)
+        random.seed(random_state)
+        
         if current_iteration < 0 or current_iteration >= n_splits:
             raise ValueError(f'current_iteration must be in [0, {n_splits-1}]  (between 0 and n_splits-1)')
             
@@ -369,11 +404,30 @@ class PatientManager:
                                      current_iteration=current_iteration, 
                                      random_state=random_state, 
                                      shuffle=shuffle)
-        self.split_by_function(splitter)
+        self.split_by_function(splitter, random_state)
 
     
     def get_patients(self, dataset_type:shared.enums.DatasetType)->List[shared.patient.Patient]:
         return [p for p in self.patients if((dataset_type == shared.enums.DatasetType.all) or (p.dataset_type == dataset_type))]
+    
+    
+    def __get_objects_according_to_evaluation_level(self, 
+                                                    level:shared.enums.EvaluationLevel, 
+                                                    dataset_type:shared.enums.DatasetType) \
+                                                    ->List[Union[shared.tile.Tile, \
+                                                                 shared.wsi.WholeSlideImage, \
+                                                                 shared.case.Case]]:
+        objs = None
+        if(level == shared.enums.EvaluationLevel.tile):
+            objs = self.get_tiles(dataset_type = dataset_type)
+        elif(level == shared.enums.EvaluationLevel.slide):
+            objs = self.get_wsis(dataset_type=dataset_type)
+        elif(level == shared.enums.EvaluationLevel.case):
+            objs = self.get_cases(dataset_type=dataset_type)
+        else:
+            raise ValueError('Wrong value for level.')
+            
+        return objs
     
     
     def __get_tiles(self, dataset_type:shared.enums.DatasetType):
@@ -413,23 +467,7 @@ class PatientManager:
                             
         return cases
    
-    def get_objects_according_to_evaluation_level(self, 
-                                                    level:shared.enums.EvaluationLevel, 
-                                                    dataset_type:shared.enums.DatasetType) \
-                                                    ->List[Union[shared.tile.Tile, \
-                                                                 shared.wsi.WholeSlideImage, \
-                                                                 shared.case.Case]]:
-        objs = None
-        if(level == shared.enums.EvaluationLevel.tile):
-            objs = self.get_tiles(dataset_type = dataset_type)
-        elif(level == shared.enums.EvaluationLevel.slide):
-            objs = self.get_wsis(dataset_type=dataset_type)
-        elif(level == shared.enums.EvaluationLevel.case):
-            objs = self.get_cases(dataset_type=dataset_type)
-        else:
-            raise ValueError('Wrong value for level.')
-            
-        return objs
+    
     
     def get_classes(self)->List[str]:
         classes = set()
@@ -456,7 +494,7 @@ class PatientManager:
         for c in classes:
             dict_class_to_n[c] = 0
         
-        objs = self.get_objects_according_to_evaluation_level(level=level, dataset_type=dataset_type)
+        objs = self.__get_objects_according_to_evaluation_level(level=level, dataset_type=dataset_type)
         for obj in objs:
             for l in obj.get_labels():
                 dict_class_to_n[l] +=1
@@ -466,8 +504,171 @@ class PatientManager:
             dict_class_to_percentage[Class] = dict_class_to_n[Class]/len(objs)
         
         return len(objs), dict_class_to_n, dict_class_to_percentage
+
     
-                    
+    def remove_case(self, case:shared.case.Case)->bool:
+        """
+        Looks for the given Case object in patient manager's cases.
+        If it is found, it removes it and returns True, otherwise False.
+        """
+        for patient in self.patients:
+            if case in patient.cases:
+                patient.cases.remove(case)
+                return case, True
+                
+        return case, False
+
+    def remove_slide(self, wsi:shared.wsi.WholeSlideImage)->bool:
+        """
+        Looks for the given WholeSlideImage object in patient manager's WSIs.
+        If it is found, it removes it and returns True, otherwise False.
+        """
+        for patient in self.patients:
+            for case in patient.cases:
+                if wsi in case.whole_slide_images:
+                    case.whole_slide_images.remove(wsi)
+                    return wsi, True
+        return wsi, False
+
+    def remove_tile(self, tile:shared.tile.Tile)->bool:
+        """
+        Looks for the given Tile object in patient manager's tiles.
+        If it is found, it removes it and returns True, otherwise False.
+        
+        Returns:
+            Given Tile object and bool value. True means found and removed, False otherwise
+        """
+        for patient in self.patients:
+            for case in patient.cases:
+                for wsi in case.whole_slide_images:
+                    for roi in wsi.regions_of_interest:
+                        if tile in roi.tiles:
+                            roi.tiles.remove(tile)
+                            return tile, True
+        return tile, False
+    
+    
+    def __remove_objects(self, 
+                         objs:List[Union[shared.tile.Tile, shared.wsi.WholeSlideImage, shared.case.Case]], verbose=False) \
+                            ->Dict[Union[shared.tile.Tile, shared.wsi.WholeSlideImage, shared.case.Case], bool]:
+        #remove duplicates
+        objs = list(set(objs))
+        
+        #if(verbose):
+        #    pbar = tqdm(total=len(objs))
+        
+        success_dict = {}
+        def update(obj, success):
+            success_dict[obj] = success
+            #if(verbose):
+             #   pbar.update()
+            
+        def error(e):
+            print(e)
+        
+        #with multiprocessing.Pool() as pool:
+        #    for o in objs:
+        #        pool.apply_async(remove_object, 
+        #                         kwds={"patient_manager":self, 
+        #                               "obj":o}, 
+        #                               callback=update, 
+        #                               error_callback=error)                    
+        #    pool.close()
+        #    pool.join()
+        
+        
+        for o in objs:
+            obj, success = remove_object(self, o)
+            update(obj, success)
+        
+        
+        return success_dict    
+    
+    
+    def remove_cases(self, cases:List[shared.case.Case], verbose=False)-> Dict[shared.case.Case, bool]:
+        """
+        Looks for the given case objects in patient manager's cases.
+        If it is found, it removes it and returns True, otherwise False.
+        Arguments:
+        
+        Return:
+           Dictionary with Case objects as keys and bool values. True means found and removed, False otherwise
+        """
+        return self.__remove_objects(objs=cases, verbose=verbose)
+    
+
+    def remove_slides(self, wsis:List[shared.wsi.WholeSlideImage], verbose=False)-> Dict[shared.wsi.WholeSlideImage, bool]:
+        """
+        Looks for the given slide objects in patient manager's slides.
+        If it is found, it removes it and returns True, otherwise False.
+        Arguments:
+        
+        Return:
+           Dictionary with WholeSlideImage objects as keys and bool values. True means found and removed, False otherwise
+        """
+        return self.__remove_objects(objs=wsis, verbose=verbose)
+    
+    def remove_tiles(self, tiles:List[shared.tile.Tile], verbose=False)-> Dict[shared.tile.Tile, bool]:
+        """
+        Looks for the given Tile objects in patient manager's tiles.
+        If it is found, it removes it and returns True, otherwise False.
+        Arguments:
+        
+        Return:
+           Dictionary with Tile objects as keys and bool values. True means found and removed, False otherwise
+        """
+        return self.__remove_objects(objs=tiles, verbose=verbose)
+    
+    
+    
+    def downsample(self, 
+                   level:shared.enums.EvaluationLevel = shared.enums.EvaluationLevel.tile, 
+                   dataset_type:shared.enums.DatasetType = shared.enums.DatasetType.train, 
+                   delta:float=0.03, 
+                   verbose=False):
+        """
+        Removes 
+        
+        Arguments:
+        
+        """
+        
+        distr = self.get_class_distribution(level=level, dataset_type=dataset_type)
+        most_present_class_name, most_present_class_percentage = max(distr[2].items(), key=lambda x : x[1])
+        least_present_class_name, least_present_class_percentage = min(distr[2].items(), key=lambda x : x[1])
+        
+        
+        count = 0
+        while((most_present_class_percentage - least_present_class_percentage) > delta):
+            distr = self.get_class_distribution(level=level, dataset_type=dataset_type)
+            most_present_class_name, most_present_class_percentage = max(distr[2].items(), key=lambda x : x[1])
+            least_present_class_name, least_present_class_percentage = min(distr[2].items(), key=lambda x : x[1])
+        
+            if(verbose and (count % 3 == 0)):
+                print(distr[2])
+            
+            #sort to get a consistent downsample result
+            objs = sorted(self.__get_objects_according_to_evaluation_level(level=level, dataset_type=dataset_type), 
+                          key = lambda x : sha256(str(x).encode()).hexdigest())
+            
+                               
+            
+            objs_suitable_for_removal = [obj for obj in objs if(most_present_class_name in obj.get_labels() 
+                                                                and least_present_class_name not in obj.get_labels())]
+            
+            
+            #remove a whole bunch at a time => faster
+            n_to_remove = int((most_present_class_percentage - least_present_class_percentage)/30*len(objs))
+            if(verbose):
+                print(f'n to remove: {n_to_remove}')
+                            
+            self.__remove_objects(objs=objs_suitable_for_removal[:n_to_remove], verbose=verbose)
+            
+            count += 1
+
+            
+
+            
 from .patient import Patient
 from .case import Case
 from .wsi import WholeSlideImage
