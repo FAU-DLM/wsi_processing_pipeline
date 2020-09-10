@@ -10,6 +10,7 @@ from sklearn.metrics import roc_curve, auc, roc_auc_score
 import matplotlib.pyplot as plt
 import numpy
 import numpy as np
+import torch
 import fastai
 import fastcore
 import math
@@ -203,22 +204,26 @@ class Evaluator:
                               dataset_type:shared.enums.DatasetType):
         y_true, y_pred = self.__get_y_true_and_y_pred(level=level, dataset_type=dataset_type)
         print(sklearn.metrics.classification_report(y_true,y_pred))
-        
+    
+    
+    
     def grad_cam(self, 
-                 image:fastai.vision.core.PILImage,
-                 thresholds:List[float] = None,
-                 take_predicted_class_indices:bool = True,
+                 tile:shared.tile.Tile,
+                 grad_cam_result:shared.enums.GradCamResult = shared.enums.GradCamResult.predicted,
+                 thresholds:List[float] = None,                 
                  class_indices:List[int] = None, 
                  model_layer = None):
         """
         Plots image with grad_cam overlay.
         Arguments:
-            image: e.g. learner.dls.valid_ds[0][0]
+            tile: one of patient_manager's tiles 
             thresholds: One threshold for every class to determine predictions from the raw output percentages.
-            take_predicted_class_index: The grad_cam heatmap can be calculated for every possible class. If this value
-                                        is true, it will be calculated for those classes whose prediction scores passed
-                                        the threshold. 
-            class_indices: Only relevant if <take_predicted_class_indices> is set to False. You can specify for which classes
+            grad_cam_result: The grad_cam heatmap can be calculated for every possible class.
+                             shared.enums.GradCamResult.predicted: grad-cams for the classes, whose prediction score were above
+                                                                     the given threshold
+                             shared.enums.GradCamResult.targets: if targets are available (tile.get_labels()), grad-cams for the 
+                                                                 classes that are part of the target classes are shown
+            class_indices: Only relevant if <grad_cam_result> is set to None. You can specify for which classes
                             the grad-cam heatmaps shall be calculated. See self.predictor.get_classes() or 
                             learner.dls.vocab for the class order.
             model_layer: The grad_cam heatmaps can be calculated for every layer of the model's body. By default this 
@@ -228,15 +233,18 @@ class Evaluator:
         Returns:
             Plots the specfied image with grad-cam heatmap overlay.
         """
-        if((not take_predicted_class_indices) and (class_indices is None or len(class_indices) == 0)):
-            raise ValueError('You have to specify class indices if take_predicted_class_indices is set to False.')
-        if((not take_predicted_class_indices) and class_indices is not None):
+        if(grad_cam_result is None and (class_indices is None or len(class_indices) == 0)):
+            raise ValueError('You have to specify class indices if grad_cam_result is set to None.')
+        if(grad_cam_result is None and class_indices is not None):
             if(min(class_indices) < 0 or max(class_indices) >= len(self.predictor.get_classes())):
                 raise ValueError('Values of class indices must be in range [0, len(self.predictor.get_classes()))')
         if(thresholds is None):
             thresholds = numpy.repeat(0.5, len(self.predictor.get_classes()))
-        if (model_layer == None):
+        if(model_layer == None):
             model_layer = self.predictor.learner.model[0][-1]
+            
+        if(grad_cam_result == shared.enums.GradCamResult.targets and (tile.get_labels() == None or len(tile.get_labels())==0)):
+           raise ValueError
         
         
         class Hook():
@@ -253,28 +261,41 @@ class Evaluator:
             def __enter__(self, *args): return self
             def __exit__(self, *args): self.hook.remove()
                 
-        x, = fastcore.utils.first(self.predictor.learner.dls.test_dl([image]))
+        x, = fastcore.utils.first(self.predictor.learner.dls.test_dl([tile]))
         x_dec = fastai.torch_core.TensorImage(self.predictor.learner.dls.train.decode((x,))[0][0])
 
-        with HookBwd(self.predictor.learner.model[0]) as hookg:
-            with Hook(self.predictor.learner.model[0]) as hook:
+        with HookBwd(model_layer) as hookg:
+            with Hook(model_layer) as hook:
                 output = self.predictor.learner.model.eval()(x.cuda())
                 act = hook.stored
                 
-                classes = []
-                if(take_predicted_class_indices):
-                    preds = torch.sigmoid(output).cpu()[0].detach().numpy() >= thresholds
-                    for n, class_name in enumerate(self.predictor.get_classes()):
+                predicted_classes = []
+                preds_raw = torch.sigmoid(output).cpu()[0].detach().numpy()
+                preds =  preds_raw >= thresholds
+                for n, class_name in enumerate(self.predictor.get_classes()):
                         if(preds[n]):
-                            classes.append(class_name)
-                
-                elif(not take_predicted_class_indices):
+                            predicted_classes.append(class_name)
+           
+                classes_to_show = []
+                if(grad_cam_result == shared.enums.GradCamResult.predicted):
+                    classes_to_show = predicted_classes
+                    
+                elif(grad_cam_result == shared.enums.GradCamResult.targets):
+                    classes_to_show = tile.get_labels()
+                elif(grad_cam_result == None):
                     for i in class_indices:
-                        classes.append(self.predictor.get_classes()[i])
+                        classes_to_show.append(self.predictor.get_classes()[i])
                 
                 else: assert False
                 
-                for n, class_name in enumerate(classes):
+                preds_dict = {}
+                for class_name, pred in zip(self.predictor.learner.dls.vocab, preds_raw):
+                    preds_dict[class_name] = pred.item()
+                print(f'predicted percentages {preds_dict}')
+                print(f'predicted classes: {predicted_classes}')
+                if(tile.get_labels() != None and len(tile.get_labels()) > 0):
+                    print(f'targets: {tile.get_labels()}')
+                for n, class_name in enumerate(classes_to_show):
                     output[0,n].backward(retain_graph=True)
                     grad = hookg.stored
                     w = grad[0].mean(dim=[1,2], keepdim=True)
@@ -284,6 +305,88 @@ class Evaluator:
                     x_dec.show(ctx=ax)
                     ax.imshow(cam_map.detach().cpu(), alpha=0.6, extent=(0,512,512,0),
                               interpolation='bilinear', cmap='magma');
+    
+    
+    #def grad_cam(self, 
+    #             image:fastai.vision.core.PILImage,
+    #             thresholds:List[float] = None,
+    #             take_predicted_class_indices:bool = True,
+    #             class_indices:List[int] = None, 
+    #             model_layer = None):
+    #    """
+    #    Plots image with grad_cam overlay.
+    #    Arguments:
+    #        image: e.g. learner.dls.valid_ds[0][0]
+    #        thresholds: One threshold for every class to determine predictions from the raw output percentages.
+    #        take_predicted_class_index: The grad_cam heatmap can be calculated for every possible class. If this value
+    #                                    is true, it will be calculated for those classes whose prediction scores passed
+    #                                    the threshold. 
+    #        class_indices: Only relevant if <take_predicted_class_indices> is set to False. You can specify for which classes
+    #                        the grad-cam heatmaps shall be calculated. See self.predictor.get_classes() or 
+    #                        learner.dls.vocab for the class order.
+    #        model_layer: The grad_cam heatmaps can be calculated for every layer of the model's body. By default this 
+    #                     library takes the last convolutional layer of the model's body, if no layer is specified.
+    #                     example of specifieng a layer: learner.model[0][-1] == last layer of model's body
+    #                     
+    #    Returns:
+    #        Plots the specfied image with grad-cam heatmap overlay.
+    #    """
+    #    if((not take_predicted_class_indices) and (class_indices is None or len(class_indices) == 0)):
+    #        raise ValueError('You have to specify class indices if take_predicted_class_indices is set to False.')
+    #    if((not take_predicted_class_indices) and class_indices is not None):
+    #        if(min(class_indices) < 0 or max(class_indices) >= len(self.predictor.get_classes())):
+    #            raise ValueError('Values of class indices must be in range [0, len(self.predictor.get_classes()))')
+    #    if(thresholds is None):
+    #        thresholds = numpy.repeat(0.5, len(self.predictor.get_classes()))
+    #    if (model_layer == None):
+    #        model_layer = self.predictor.learner.model[0][-1]
+    #    
+    #    
+    #    class Hook():
+    #        def __init__(self, m):
+    #            self.hook = m.register_forward_hook(self.hook_func)   
+    #        def hook_func(self, m, i, o): self.stored = o.detach().clone()
+    #        def __enter__(self, *args): return self
+    #        def __exit__(self, *args): self.hook.remove()
+    #    
+    #    class HookBwd():
+    #        def __init__(self, m):
+    #            self.hook = m.register_backward_hook(self.hook_func)   
+    #        def hook_func(self, m, gi, go): self.stored = go[0].detach().clone()
+    #        def __enter__(self, *args): return self
+    #        def __exit__(self, *args): self.hook.remove()
+    #            
+    #    x, = fastcore.utils.first(self.predictor.learner.dls.test_dl([image]))
+    #    x_dec = fastai.torch_core.TensorImage(self.predictor.learner.dls.train.decode((x,))[0][0])
+#
+    #    with HookBwd(self.predictor.learner.model[0]) as hookg:
+    #        with Hook(self.predictor.learner.model[0]) as hook:
+    #            output = self.predictor.learner.model.eval()(x.cuda())
+    #            act = hook.stored
+    #            
+    #            classes = []
+    #            if(take_predicted_class_indices):
+    #                preds = torch.sigmoid(output).cpu()[0].detach().numpy() >= thresholds
+    #                for n, class_name in enumerate(self.predictor.get_classes()):
+    #                    if(preds[n]):
+    #                        classes.append(class_name)
+    #            
+    #            elif(not take_predicted_class_indices):
+    #                for i in class_indices:
+    #                    classes.append(self.predictor.get_classes()[i])
+    #            
+    #            else: assert False
+    #            
+    #            for n, class_name in enumerate(classes):
+    #                output[0,n].backward(retain_graph=True)
+    #                grad = hookg.stored
+    #                w = grad[0].mean(dim=[1,2], keepdim=True)
+    #                cam_map = (w * act[0]).sum(0)
+    #                _,ax = plt.subplots()
+    #                ax.title.set_text(class_name)
+    #                x_dec.show(ctx=ax)
+    #                ax.imshow(cam_map.detach().cpu(), alpha=0.6, extent=(0,512,512,0),
+    #                          interpolation='bilinear', cmap='magma');
     
     def get_tiles_with_top_losses(self, 
                                   dataset_type:shared.enums.DatasetType, 
