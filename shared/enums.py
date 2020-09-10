@@ -24,3 +24,7 @@ class EvaluationLevel(Enum):
     tile = 0
     slide = 1
     case = 2
+    
+class GradCamResult(Enum):
+    predicted = 0
+    targets = 1
