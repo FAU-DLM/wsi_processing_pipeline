@@ -32,7 +32,7 @@ class GradCam():
         self.model = model.cuda()
         self.model_layer = model_layer
 
-    def generate_cam(self, input_image:torch.Tensor, class_index:int):
+    def generate_cam(self, input_image:torch.Tensor, class_index:int)->torch.Tensor:
         self.model.cpu()
         input_image = input_image.cpu()
         with HookBwd(self.model_layer) as hookg:
