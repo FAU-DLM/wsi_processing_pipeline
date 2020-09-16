@@ -33,9 +33,11 @@ class GradCam():
         self.model_layer = model_layer
 
     def generate_cam(self, input_image:torch.Tensor, class_index:int):
+        self.model.cpu()
+        input_image = input_image.cpu()
         with HookBwd(self.model_layer) as hookg:
             with Hook(self.model_layer) as hook:
-                output = self.model.eval()(input_image.cuda())
+                output = self.model.eval()(input_image)
                 act = hook.stored
                 output[0,class_index].backward(retain_graph=True)
                 grad = hookg.stored
