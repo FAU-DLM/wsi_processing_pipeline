@@ -24,8 +24,7 @@ class Evaluator:
     predictor:postprocessing.predictor.Predictor = None
     def __init__(self, predictor:postprocessing.predictor.Predictor):
         self.predictor = predictor
-        
-    
+            
     def __get_objects_according_to_evaluation_level(self, 
                                                     level:shared.enums.EvaluationLevel, 
                                                     dataset_type:shared.enums.DatasetType) \
@@ -247,11 +246,13 @@ class Evaluator:
         if(grad_cam_result == shared.enums.GradCamResult.targets \
            and (tile.get_labels() == None or len(tile.get_labels())==0)):
             raise ValueError
+            
+        self.predictor.learner.model.cpu()
                 
         x, = fastcore.utils.first(self.predictor.learner.dls.test_dl([tile]))
         x_dec = fastai.torch_core.TensorImage(self.predictor.learner.dls.train.decode((x,))[0][0])
 
-        output = self.predictor.learner.model.eval()(x.cuda())
+        output = self.predictor.learner.model.eval()(x.cpu())
                 
         predicted_classes = []
         preds_raw = torch.sigmoid(output).cpu()[0].detach().numpy()
@@ -285,12 +286,12 @@ class Evaluator:
             _,ax = plt.subplots()
             ax.title.set_text(class_name)
             x_dec.show(ctx=ax)
-            ax.imshow(cam_map.detach().cpu(), alpha=0.6, extent=(0,512,512,0), interpolation='bilinear', cmap='magma');
+            ax.imshow(cam_map.detach().cpu(), alpha=0.6, interpolation='bilinear', cmap='magma');
     
     
     
     ###
-    #  previous functioning version
+    #  previous functioning version. just keeping it here for a while, if there might be a bug in the new version.
     ###
     #def grad_cam(self, 
     #             tile:shared.tile.Tile,
