@@ -5,6 +5,7 @@ import postprocessing
 import shared
 import visualization
 from visualization.gradcam import GradCam
+from visualization.guided_gradcam import GuidedGradCam
 
 from tqdm import tqdm
 import sklearn
@@ -205,90 +206,170 @@ class Evaluator:
                               dataset_type:shared.enums.DatasetType):
         y_true, y_pred = self.__get_y_true_and_y_pred(level=level, dataset_type=dataset_type)
         print(sklearn.metrics.classification_report(y_true,y_pred))
-    
-    
-    
-    def grad_cam(self, 
-                 tile:shared.tile.Tile,
-                 grad_cam_result:shared.enums.GradCamResult = shared.enums.GradCamResult.predicted,
-                 thresholds:List[float] = None,                 
-                 class_indices:List[int] = None, 
-                 model_layer = None):
-        """
-        Plots image with grad_cam overlay.
-        Arguments:
-            tile: one of patient_manager's tiles 
-            thresholds: One threshold for every class to determine predictions from the raw output percentages.
-            grad_cam_result: The grad_cam heatmap can be calculated for every possible class.
-                             shared.enums.GradCamResult.predicted: grad-cams for the classes, whose prediction score were above
-                                                                     the given threshold
-                             shared.enums.GradCamResult.targets: if targets are available (tile.get_labels()), grad-cams for the 
-                                                                 classes that are part of the target classes are shown
-            class_indices: Only relevant if <grad_cam_result> is set to None. You can specify for which classes
-                            the grad-cam heatmaps shall be calculated. See self.predictor.get_classes() or 
-                            learner.dls.vocab for the class order.
-            model_layer: The grad_cam heatmaps can be calculated for every layer of the model's body. By default this 
-                         library takes the last convolutional layer of the model's body, if no layer is specified.
-                         example of specifieng a layer: learner.model[0][-1] == last layer of model's body
-                         
-        Returns:
-            Plots the specfied image with grad-cam heatmap overlay.
-        """
-        if(grad_cam_result is None and (class_indices is None or len(class_indices) == 0)):
-            raise ValueError('You have to specify class indices if grad_cam_result is set to None.')
-        if(grad_cam_result is None and class_indices is not None):
-            if(min(class_indices) < 0 or max(class_indices) >= len(self.predictor.get_classes())):
-                raise ValueError(f'Values of class indices must be in range [0, {len(self.predictor.get_classes())})')
-        if(thresholds is None):
-            thresholds = numpy.repeat(0.5, len(self.predictor.get_classes()))
-        if(model_layer == None):
-            model_layer = self.predictor.learner.model[0][-1]           
-        if(grad_cam_result == shared.enums.GradCamResult.targets \
-           and (tile.get_labels() == None or len(tile.get_labels())==0)):
-            raise ValueError
             
-        self.predictor.learner.model.cpu()
-                
-        x, = fastcore.utils.first(self.predictor.learner.dls.test_dl([tile]))
-        x_dec = fastai.torch_core.TensorImage(self.predictor.learner.dls.train.decode((x,))[0][0])
+    def get_tiles_with_top_losses(self, 
+                                  dataset_type:shared.enums.DatasetType, 
+                                  k:int = 10, 
+                                  descending:bool = True)->List[shared.tile.Tile]:
+        """
+        Returns the k tiles from the specified dataset with the highest or if descending == False with the lowest loss.
+        """
+        tls = self.predictor.patient_manager.get_tiles(dataset_type = dataset_type)
+        tls.sort(key=lambda tile: tile.loss, reverse=descending)
+        return tls[:k]
+    
+    
+    def __plot_figures(self, figures, ncols, figsize=(18,18)):
+        # https://stackoverflow.com/questions/11159436/multiple-figures-in-a-single-window
+        """Plot a dictionary of figures.
+    
+        Parameters
+        ----------
+        figures : <title, figure> dictionary
+        ncols : number of columns of subplots wanted in the display
+        nrows : number of rows of subplots wanted in the figure
+        """
+        nrows = math.ceil(len(figures)/ncols)
+        fig, axeslist = plt.subplots(ncols=ncols, nrows=nrows, figsize=figsize)
 
-        output = self.predictor.learner.model.eval()(x.cpu())
-                
-        predicted_classes = []
-        preds_raw = torch.sigmoid(output).cpu()[0].detach().numpy()
-        preds =  preds_raw >= thresholds
-        for n, class_name in enumerate(self.predictor.get_classes()):
-            if(preds[n]):
-                predicted_classes.append(class_name)
-           
-        classes_to_show = []
-        if(grad_cam_result == shared.enums.GradCamResult.predicted):
-            classes_to_show = predicted_classes                    
-        elif(grad_cam_result == shared.enums.GradCamResult.targets):
-            classes_to_show = tile.get_labels()
-        elif(grad_cam_result == None):
-            labels = self.predictor.get_classes()
-            for i in class_indices:
-                classes_to_show.append(labels[i])               
-        else: assert False
-                
-        preds_dict = {}
-        for class_name, pred in zip(self.predictor.learner.dls.vocab, preds_raw):
-            preds_dict[class_name] = pred.item()
-        print(f'predicted percentages {preds_dict}')
-        print(f'predicted classes: {predicted_classes}')
-        if(tile.get_labels() != None and len(tile.get_labels()) > 0):
-            print(f'targets: {tile.get_labels()}')
+        for i in range(0, nrows*ncols):
+            if(i < len(figures)):
+                axeslist.ravel()[i].imshow(list(figures.values())[i], cmap=plt.gray())
+                axeslist.ravel()[i].set_title(list(figures.keys())[i])
+            axeslist.ravel()[i].set_axis_off()
+        plt.subplots_adjust(left = None, bottom=None, right=None, top=None, wspace=None, hspace=None)
+    
+    def plot_top_losses(self, dataset_type:shared.enums.DatasetType, k:int = 10, descending:bool = True):
+        """
+        Plots the k tiles from the specified dataset with the highest or if descending == False with the lowest loss.
+        """
+        tls = self.get_tiles_with_top_losses(dataset_type=dataset_type, k=k, descending=descending)
+        
+        ###
+        # dataframe
+        ###
+        df = pd.DataFrame(columns=['patient', 'slide', 'target', 'predicted', 'probabilities', 'loss'])
+        for t in tls:
+            predicted = []
+            for Class, bool_value in t.predictions_thresh.items():
+                if(bool_value):
+                    predicted.append(Class)
+            df = df.append({'patient':t.roi.whole_slide_image.case.patient.patient_id, 
+                       'slide':t.roi.whole_slide_image.slide_id, 
+                       'target':t.labels, 
+                       'predicted':predicted, 
+                       'probabilities':t.predictions_raw, 
+                       'loss':t.loss}, ignore_index=True)
+        fastai.torch_core.display_df(df)
+        # Alternative 
+        #https://stackoverflow.com/questions/26873127/show-dataframe-as-table-in-ipython-notebook
+        #from IPython.display import display, HTML
+        
+        ###
+        # images
+        ###
+        tile_images = [t.get_pil_image() for t in self.predictor.patient_manager.get_all_tiles()[:k]]
+        figures = {}
+        for n, img in enumerate(tile_images):
+            figures[n] = img
+        self.__plot_figures(figures=figures, ncols=4)
+    
+    def __calculate_metric(self, 
+                            obj:Union[shared.case.Case, 
+                            shared.wsi.WholeSlideImage, 
+                            shared.tile.Tile], 
+                            metric:Callable)->float:
+        """
+        Arguments:
+            obj: shared.case.Case or shared.wsi.WholeSlideImage or shared.tile.Tile 
+            metric: Callable that takes y_pred and y_true as arguments
+        """
+        y_pred = list(obj.predictions_raw.values())
+        y_true = obj.get_labels_one_hot_encoded()
+        return metric(y_pred=y_pred, y_true=y_true)
+        
+    
+    def get_orderd_by_metric(self, 
+                          dataset_type:shared.enums.DatasetType, 
+                          level:shared.enums.EvaluationLevel, 
+                          k:int = 10, 
+                          metric:Callable=sklearn.metrics.mean_absolute_error, 
+                          descending:bool = True)->List[Union[shared.case.Case, 
+                                                                shared.wsi.WholeSlideImage, 
+                                                                shared.tile.Tile]]:
+        """
+        This method compares the real labels with the predicted probabilities and returns the k cases/slides/tiles 
+        (depending on level) where the predicted probabilities differ the most/least 
+        (depending on "descending") from the real labels using metric.
+        Example for standard value metric = sklearn.metrics.mean_absolute_error:
+            two classes: A and B
+            a case/slide/tile with the target [0,1] and the predicted probabilities of [0.2, 0.8]
+            Difference between reality and prediction is now calculated the following way:
+            (abs(0-0.2)+abs(1-0.8))/2
             
-        grad_cam_extractor = GradCam(model = self.predictor.learner.model, model_layer = model_layer)
-        for n, class_name in enumerate(classes_to_show):
-            cam_map = grad_cam_extractor.generate_cam(input_image = x, class_index = n)
-            _,ax = plt.subplots()
-            ax.title.set_text(class_name)
-            x_dec.show(ctx=ax)
-            ax.imshow(cam_map.detach().cpu(), alpha=0.6, interpolation='bilinear', cmap='magma');
+        Arguments:
+            dataset_type:
+            level:
+            k: number of objects to return
+            metric: metric to order the objects
+            descending:
+        Returns:
+            The k objects with the highest metric values
+        """
+        objs = self.__get_objects_according_to_evaluation_level(dataset_type=dataset_type, level=level)
+        for obj in objs:
+            obj.metric = self.__calculate_metric(obj=obj, metric=metric)
+        objs.sort(key=lambda o: o.metric, reverse=descending)
+        return objs[:k]
     
-    
+    def get_df_of_k_top_ordered_by_metric(self, 
+                                          dataset_type:shared.enums.DatasetType, 
+                                          level:shared.enums.EvaluationLevel, 
+                                          k:int = 10, 
+                                          metric:Callable=sklearn.metrics.mean_absolute_error, 
+                                          descending:bool = True)->pandas.DataFrame:
+        """
+        This method compares the real labels with the predicted probabilities and returns the k cases/slides/tiles 
+        (depending on level) where the predicted probabilities differ the most/least 
+        (depending on "descending") from the real labels using metric.
+        Example for standard value metric = sklearn.metrics.mean_absolute_error:
+            two classes: A and B
+            a case/slide/tile with the target [0,1] and the predicted probabilities of [0.2, 0.8]
+            Difference between reality and prediction is now calculated the following way:
+            (abs(0-0.2)+abs(1-0.8))/2
+            
+        Arguments:
+            dataset_type:
+            level:
+            k: number of objects to return
+            metric: metric to order the objects
+            descending:
+        Returns:
+            a dataframe with information about the k objects with the highest metric values
+        """
+        objs = self.get_orderd_by_metric(dataset_type=dataset_type, 
+                                         level=level, 
+                                         k=k, 
+                                         metric=metric, 
+                                         descending=descending)
+        ###
+        # dataframe
+        ###
+        level_name = str(level).split('.')[1]
+        df = pd.DataFrame(columns=[level_name, 'target', 'predicted', 'probabilities', 'metric'])
+        for o in objs:
+            predicted = []
+            for Class, bool_value in o.predictions_thresh.items():
+                if(bool_value):
+                    predicted.append(Class)
+            df = df.append({level_name:o,  
+                            'target':o.get_labels(), 
+                            'predicted':predicted, 
+                           'probabilities':o.predictions_raw, 
+                           'metric':o.metric}, 
+                           ignore_index=True)
+        return df
+
     
     ###
     #  previous functioning version. just keeping it here for a while, if there might be a bug in the new version.
@@ -391,168 +472,157 @@ class Evaluator:
     #                x_dec.show(ctx=ax)
     #                ax.imshow(cam_map.detach().cpu(), alpha=0.6, extent=(0,512,512,0),
     #                          interpolation='bilinear', cmap='magma');
+    
+    
+    
+    def __common_trunk(self, 
+                         tile:shared.tile.Tile,
+                         grad_cam_result:shared.enums.GradCamResult = shared.enums.GradCamResult.predicted,
+                         thresholds:List[float] = None,                 
+                         class_indices:List[int] = None, 
+                         model_layer = None):
         
-    def get_tiles_with_top_losses(self, 
-                                  dataset_type:shared.enums.DatasetType, 
-                                  k:int = 10, 
-                                  descending:bool = True)->List[shared.tile.Tile]:
-        """
-        Returns the k tiles from the specified dataset with the highest or if descending == False with the lowest loss.
-        """
-        tls = self.predictor.patient_manager.get_tiles(dataset_type = dataset_type)
-        tls.sort(key=lambda tile: tile.loss, reverse=descending)
-        return tls[:k]
-    
-    
-    def __plot_figures(self, figures, nrows, ncols, figsize=(18,18)):
-        # https://stackoverflow.com/questions/11159436/multiple-figures-in-a-single-window
-        """Plot a dictionary of figures.
-    
-        Parameters
-        ----------
-        figures : <title, figure> dictionary
-        ncols : number of columns of subplots wanted in the display
-        nrows : number of rows of subplots wanted in the figure
-        """
-    
-        fig, axeslist = plt.subplots(ncols=ncols, nrows=nrows, figsize=figsize)
+        if(grad_cam_result is None and (class_indices is None or len(class_indices) == 0)):
+            raise ValueError('You have to specify class indices if grad_cam_result is set to None.')
+        if(grad_cam_result is None and class_indices is not None):
+            if(min(class_indices) < 0 or max(class_indices) >= len(self.predictor.get_classes())):
+                raise ValueError(f'Values of class indices must be in range [0, {len(self.predictor.get_classes())})')
+        if(thresholds is None):
+            thresholds = numpy.repeat(0.5, len(self.predictor.get_classes()))
+        if(model_layer == None):
+            model_layer = self.predictor.learner.model[0][-1]           
+        if(grad_cam_result == shared.enums.GradCamResult.targets \
+           and (tile.get_labels() == None or len(tile.get_labels())==0)):
+            raise ValueError('no labels available for the specified tile')
+            
+        self.predictor.learner.model.cpu()
+                
+        x, = fastcore.utils.first(self.predictor.learner.dls.test_dl([tile]))
+        x_dec = fastai.torch_core.TensorImage(self.predictor.learner.dls.train.decode((x,))[0][0])
 
-        for i in range(0, nrows*ncols):
-            if(i < len(figures)):
-                axeslist.ravel()[i].imshow(list(figures.values())[i], cmap=plt.gray())
-                axeslist.ravel()[i].set_title(list(figures.keys())[i])
-            axeslist.ravel()[i].set_axis_off()
-        plt.subplots_adjust(left = None, bottom=None, right=None, top=None, wspace=None, hspace=None)
-    
-    def plot_top_losses(self, dataset_type:shared.enums.DatasetType, k:int = 10, descending:bool = True):
-        """
-        Plots the k tiles from the specified dataset with the highest or if descending == False with the lowest loss.
-        """
-        tls = self.get_tiles_with_top_losses(dataset_type=dataset_type, k=k, descending=descending)
-        
-        ###
-        # dataframe
-        ###
-        df = pd.DataFrame(columns=['patient', 'slide', 'target', 'predicted', 'probabilities', 'loss'])
-        for t in tls:
-            predicted = []
-            for Class, bool_value in t.predictions_thresh.items():
-                if(bool_value):
-                    predicted.append(Class)
-            df = df.append({'patient':t.roi.whole_slide_image.case.patient.patient_id, 
-                       'slide':t.roi.whole_slide_image.slide_id, 
-                       'target':t.labels, 
-                       'predicted':predicted, 
-                       'probabilities':t.predictions_raw, 
-                       'loss':t.loss}, ignore_index=True)
-        fastai.torch_core.display_df(df)
-        # Alternative 
-        #https://stackoverflow.com/questions/26873127/show-dataframe-as-table-in-ipython-notebook
-        #from IPython.display import display, HTML
-        
-        ###
-        # images
-        ###
-        ncols = 4
-        nrows = math.ceil(k/ncols)
-        tile_images = [t.get_pil_image() for t in self.predictor.patient_manager.get_all_tiles()[:k]]
-        figures = {}
-        for n, img in enumerate(tile_images):
-            figures[n] = img
-        self.__plot_figures(figures=figures, nrows=nrows, ncols=ncols)
-    
-    def __calculate_metric(self, 
-                            obj:Union[shared.case.Case, 
-                            shared.wsi.WholeSlideImage, 
-                            shared.tile.Tile], 
-                            metric:Callable)->float:
-        """
-        Arguments:
-            obj: shared.case.Case or shared.wsi.WholeSlideImage or shared.tile.Tile 
-            metric: Callable that takes y_pred and y_true as arguments
-        """
-        y_pred = list(obj.predictions_raw.values())
-        y_true = obj.get_labels_one_hot_encoded()
-        return metric(y_pred=y_pred, y_true=y_true)
-        
-    
-    def get_orderd_by_metric(self, 
-                          dataset_type:shared.enums.DatasetType, 
-                          level:shared.enums.EvaluationLevel, 
-                          k:int = 10, 
-                          metric:Callable=sklearn.metrics.mean_absolute_error, 
-                          descending:bool = True)->List[Union[shared.case.Case, 
-                                                                shared.wsi.WholeSlideImage, 
-                                                                shared.tile.Tile]]:
-        """
-        This method compares the real labels with the predicted probabilities and returns the k cases/slides/tiles 
-        (depending on level) where the predicted probabilities differ the most/least 
-        (depending on "descending") from the real labels using metric.
-        Example for standard value metric = sklearn.metrics.mean_absolute_error:
-            two classes: A and B
-            a case/slide/tile with the target [0,1] and the predicted probabilities of [0.2, 0.8]
-            Difference between reality and prediction is now calculated the following way:
-            (abs(0-0.2)+abs(1-0.8))/2
+        output = self.predictor.learner.model.eval()(x.cpu())
+                
+        predicted_classes = []
+        preds_raw = torch.sigmoid(output).cpu()[0].detach().numpy()
+        preds =  preds_raw >= thresholds
+        for n, class_name in enumerate(self.predictor.get_classes()):
+            if(preds[n]):
+                predicted_classes.append(class_name)
+           
+        classes_to_show = []
+        if(grad_cam_result == shared.enums.GradCamResult.predicted):
+            classes_to_show = predicted_classes                    
+        elif(grad_cam_result == shared.enums.GradCamResult.targets):
+            classes_to_show = tile.get_labels()
+        elif(grad_cam_result == None):
+            labels = self.predictor.get_classes()
+            for i in class_indices:
+                classes_to_show.append(labels[i])               
+        else: assert False
+                
+        preds_dict = {}
+        for class_name, pred in zip(self.predictor.learner.dls.vocab, preds_raw):
+            preds_dict[class_name] = pred.item()
+        print(f'predicted percentages {preds_dict}')
+        print(f'predicted classes: {predicted_classes}')
+        if(tile.get_labels() != None and len(tile.get_labels()) > 0):
+            print(f'targets: {tile.get_labels()}')
             
-        Arguments:
-            dataset_type:
-            level:
-            k: number of objects to return
-            metric: metric to order the objects
-            descending:
-        Returns:
-            The k objects with the highest metric values
-        """
-        objs = self.__get_objects_according_to_evaluation_level(dataset_type=dataset_type, level=level)
-        for obj in objs:
-            obj.metric = self.__calculate_metric(obj=obj, metric=metric)
-        objs.sort(key=lambda o: o.metric, reverse=descending)
-        return objs[:k]
+        return x, x_dec, classes_to_show
     
-    def get_df_of_k_top_ordered_by_metric(self, 
-                                          dataset_type:shared.enums.DatasetType, 
-                                          level:shared.enums.EvaluationLevel, 
-                                          k:int = 10, 
-                                          metric:Callable=sklearn.metrics.mean_absolute_error, 
-                                          descending:bool = True)->pandas.DataFrame:
+
+    def grad_cam(self, 
+                 tile:shared.tile.Tile,
+                 grad_cam_result:shared.enums.GradCamResult = shared.enums.GradCamResult.predicted,
+                 thresholds:List[float] = None,                 
+                 class_indices:List[int] = None, 
+                 model_layer = None, 
+                 figsize=(5,5)):
         """
-        This method compares the real labels with the predicted probabilities and returns the k cases/slides/tiles 
-        (depending on level) where the predicted probabilities differ the most/least 
-        (depending on "descending") from the real labels using metric.
-        Example for standard value metric = sklearn.metrics.mean_absolute_error:
-            two classes: A and B
-            a case/slide/tile with the target [0,1] and the predicted probabilities of [0.2, 0.8]
-            Difference between reality and prediction is now calculated the following way:
-            (abs(0-0.2)+abs(1-0.8))/2
-            
+        Plots image with grad_cam overlay.
         Arguments:
-            dataset_type:
-            level:
-            k: number of objects to return
-            metric: metric to order the objects
-            descending:
+            tile: one of patient_manager's tiles 
+            thresholds: One threshold for every class to determine predictions from the raw output percentages.
+            grad_cam_result: The grad_cam heatmap can be calculated for every possible class.
+                             shared.enums.GradCamResult.predicted: grad-cams for the classes, whose prediction score were above
+                                                                     the given threshold
+                             shared.enums.GradCamResult.targets: if targets are available (tile.get_labels()), grad-cams for the 
+                                                                 classes that are part of the target classes are shown
+            class_indices: Only relevant if <grad_cam_result> is set to None. You can specify for which classes
+                            the grad-cam heatmaps shall be calculated. See self.predictor.get_classes() or 
+                            learner.dls.vocab for the class order.
+            model_layer: The grad_cam heatmaps can be calculated for every layer of the model's body. By default this 
+                         library takes the last convolutional layer of the model's body, if no layer is specified.
+                         example of specifieng a layer: learner.model[0][-1] == last layer of model's body
+            figsize: size of the resulting plot
+                         
         Returns:
-            a dataframe with information about the k objects with the highest metric values
+            Plots the specfied image with grad-cam heatmap overlay.
         """
-        objs = self.get_orderd_by_metric(dataset_type=dataset_type, 
-                                         level=level, 
-                                         k=k, 
-                                         metric=metric, 
-                                         descending=descending)
-        ###
-        # dataframe
-        ###
-        level_name = str(level).split('.')[1]
-        df = pd.DataFrame(columns=[level_name, 'target', 'predicted', 'probabilities', 'metric'])
-        for o in objs:
-            predicted = []
-            for Class, bool_value in o.predictions_thresh.items():
-                if(bool_value):
-                    predicted.append(Class)
-            df = df.append({level_name:o,  
-                            'target':o.get_labels(), 
-                            'predicted':predicted, 
-                           'probabilities':o.predictions_raw, 
-                           'metric':o.metric}, 
-                           ignore_index=True)
-        return df
+        x, x_dec, classes_to_show = self.__common_trunk(tile=tile, 
+                                                        grad_cam_result=grad_cam_result, 
+                                                        thresholds=thresholds, 
+                                                        class_indices=class_indices, 
+                                                        model_layer=model_layer)
+                
+            
+        grad_cam_extractor = GradCam(model = self.predictor.learner.model, model_layer = model_layer)
+        vocab = list(self.predictor.get_classes())
+        for class_name in classes_to_show:
+            cam_map = grad_cam_extractor.generate_cam(input_image = x, class_index = vocab.index(class_name))
+            _,ax = plt.subplots(figsize=figsize)
+            ax.title.set_text(class_name)
+            x_dec.show(ctx=ax)
+            ax.imshow(cam_map.detach().cpu(), alpha=0.6, interpolation='bilinear', cmap='magma');
+            
+
+    def guided_grad_cam(self, 
+                         tile:shared.tile.Tile,
+                         grad_cam_result:shared.enums.GradCamResult = shared.enums.GradCamResult.predicted,
+                         thresholds:List[float] = None,                 
+                         class_indices:List[int] = None, 
+                         model_layer = None, 
+                         figsize = (10,10)):
+        """
+        Plots image of guided grad-cam for an image and a certain class.
+        Arguments:
+            tile: one of patient_manager's tiles 
+            thresholds: One threshold for every class to determine predictions from the raw output percentages.
+            grad_cam_result: The guided grad-cam mask can be calculated for every possible class.
+                             shared.enums.GradCamResult.predicted: grad-cams for the classes, whose prediction score 
+                                                                     were above the given threshold
+                             shared.enums.GradCamResult.targets: if targets are available (tile.get_labels()), 
+                                                                 grad-cams for the 
+                                                                 classes that are part of the target classes are shown
+            class_indices: Only relevant if <grad_cam_result> is set to None. You can specify for which classes
+                            the grad-cam heatmaps shall be calculated. See self.predictor.get_classes() or 
+                            learner.dls.vocab for the class order.
+            model_layer: To calculate the guided grad-cam mask, a grad-cam is calculated. 
+                         The grad_cam can be calculated for every layer of the model's body. By default this 
+                         library takes the last convolutional layer of the model's body, if no layer is specified.
+                         example of specifieng a layer: learner.model[0][-1] == last layer of model's body
+            figsize: size of the resulting plot
+            
+        Returns:
+            Plots the original HE tile with guided grad cam maps for the different classes
+        """
+        x, x_dec, classes_to_show = self.__common_trunk(tile=tile, 
+                                                        grad_cam_result=grad_cam_result, 
+                                                        thresholds=thresholds, 
+                                                        class_indices=class_indices, 
+                                                        model_layer=model_layer)
+            
+        GGC = GuidedGradCam(self.predictor.learner.model)
+        vocab = list(self.predictor.get_classes())
+        
+        _, ax = plt.subplots(figsize=figsize)
+        ax.title.set_text('HE')
+        ax.imshow(tile.get_pil_image())
+        
+        for class_name in classes_to_show:
+            guided_grad_cam_mask_denormed = GGC.generate_guided_grad_cam(input_image=x, 
+                                                                         class_index=vocab.index(class_name), 
+                                                                         denorm=True)           
+            _,ax = plt.subplots(figsize=figsize)
+            ax.title.set_text(class_name)
+            ax.imshow(guided_grad_cam_mask_denormed.permute(1,2,0))
