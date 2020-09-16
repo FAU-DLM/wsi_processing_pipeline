@@ -50,7 +50,7 @@ class GuidedBackprop():
         first_layer = self.model[0][0]
         self.hooks.append(first_layer.register_backward_hook(__hook_function))
        
-    def generate_gradients(self, input_image:torch.Tensor, class_index:int):      
+    def generate_gradients(self, input_image:torch.Tensor, class_index:int)->torch.Tensor:      
         self.model.cpu()
         self.model.eval()
         self.model.requires_grad_()
@@ -80,4 +80,4 @@ class GuidedBackprop():
                 h.remove()
             self.hooks.clear()
               
-        return gradients_as_arr
+        return torch.from_numpy(gradients_as_arr)
