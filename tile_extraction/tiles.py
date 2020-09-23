@@ -264,13 +264,15 @@ class TileSummary:
 
     def show_wsi_with_marked_tiles(self, 
                                    figsize:Tuple[int] = (10,10),
-                                   scale_factor:int = 32):
+                                   scale_factor:int = 32, 
+                                   axis_off:bool = False):
         """    
         Loads a whole slide image, scales it down, converts it into a numpy array and displays it with a grid overlay for all tiles
         that passed scoring to visualize which tiles e.g. "tiles.WsiOrROIToTilesMultithreaded" calculated as worthy to keep.
         Arguments:
             figsize: Size of the plotted matplotlib figure containing the image.
-            scale_factor: The larger, the faster this method works, but the plotted image has less resolution.    
+            scale_factor: The larger, the faster this method works, but the plotted image has less resolution.
+            axis_off: bool value that indicates, if axis shall be plotted with the picture
         """
         wsi_pil, large_w, large_h, new_w, new_h, best_level_for_downsample = wsi_to_scaled_pil_image(self.wsi_path,                                                                                                scale_factor=self.scale_factor,
                                                                                                      level=0)                                                                  
@@ -284,7 +286,7 @@ class TileSummary:
             height = util.adjust_level(tile.get_height(), tile.level, best_level_for_downsample)
             box = np.array([x,y,width,height])
             boxes.append(box)
-        util.show_np_with_bboxes(wsi_np, boxes, figsize)
+        util.show_np_with_bboxes(wsi_np, boxes, figsize, axis_off=axis_off)
         
         
     def show_wsi_with_rois(self, 

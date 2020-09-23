@@ -40,7 +40,8 @@ ADDITIONAL_NP_STATS = False
 def show_wsi_with_rois(wsi_path:pathlib.Path, 
                        rois:List[RegionOfInterest], 
                        figsize:Tuple[int] = (10,10), 
-                       scale_factor:int = 32):
+                       scale_factor:int = 32,
+                       axis_off:bool = False):
         """    
         Loads a whole slide image, scales it down, converts it into a numpy array 
         and displays it with a grid overlay for all tiles,
@@ -51,7 +52,8 @@ def show_wsi_with_rois(wsi_path:pathlib.Path,
             tilesummary: a TileSummary object of one wsi
             wsi_path: Path to a whole-slide image
             df_tiles: A pandas dataframe from e.g. "tiles.WsiOrROIToTilesMultithreaded" 
-                        with spacial information about all tiles           
+                        with spacial information about all tiles 
+            axis_off: bool value that indicates, if axis shall be plotted with the picture
         """
         wsi_pil, large_w, large_h, new_w, new_h, best_level_for_downsample = tiles.wsi_to_scaled_pil_image(wsi_path,
                                                                                             scale_factor=scale_factor,
@@ -62,7 +64,7 @@ def show_wsi_with_rois(wsi_path:pathlib.Path,
             roi_adj = roi.change_level_deep_copy(new_level=best_level_for_downsample)
             box = np.array([roi_adj.x_upper_left, roi_adj.y_upper_left, roi_adj.width, roi_adj.height])
             boxes.append(box)
-        show_np_with_bboxes(wsi_np, boxes, figsize)
+        show_np_with_bboxes(wsi_np, boxes, figsize, axis_off=axis_off)
         
         
 def adjust_level(value_to_adjust:int, from_level:int, to_level:int)->int:
@@ -91,18 +93,23 @@ def safe_dict_access(dict:Dict, key):
     except:
         return None
 
-def show_np_with_bboxes(img:numpy.ndarray, bboxes:List[numpy.ndarray], figsize:tuple=(10,10)):
+def show_np_with_bboxes(img:numpy.ndarray, bboxes:List[numpy.ndarray], figsize:tuple=(10,10), axis_off:bool=False):
     """
     Arguments:
         img: img as numpy array
         bboxes: List of bounding boxes where each bbox is a numpy array: 
                 array([ x-upper-left, y-upper-left,  width,  height]) 
                 e.g. array([ 50., 211.,  17.,  19.])
+        axis_off: bool value that indicates, if axis shall be plotted with the picture
     """    
     # Create figure and axes
     fig,ax = plt.subplots(1,1,figsize=figsize)    
     # Display the image
-    ax.imshow(img)    
+    ax.imshow(img) 
+    
+    if(axis_off):
+        ax.axis('off')
+        
     # Create a Rectangle patch for each bbox
     for b in bboxes:
         rect = matplotlib.patches.Rectangle((b[0],b[1]),b[2],b[3],linewidth=1,edgecolor='r',facecolor='none')    
