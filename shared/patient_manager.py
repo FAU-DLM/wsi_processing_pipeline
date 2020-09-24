@@ -32,7 +32,7 @@ from hashlib import sha256
 #https://stackoverflow.com/questions/8804830/python-multiprocessing-picklingerror-cant-pickle-type-function
 def remove_object(patient_manager:shared.patient_manager.PatientManager, 
                     obj:Union[shared.tile.Tile, shared.wsi.WholeSlideImage, shared.case.Case])->bool:
-    if(isinstance(obj, shared.tile.Tile)):
+    if(isinstance(obj, tile.Tile)):
         return obj, patient_manager.remove_tile(tile = obj)
     if(isinstance(obj, shared.wsi.WholeSlideImage)):
         return obj, patient_manager.remove_slide(wsi = obj)
@@ -43,9 +43,7 @@ def remove_object(patient_manager:shared.patient_manager.PatientManager,
             
 
 class PatientManager:
-    
-
-    
+        
     patients:List[Patient] = None
     
     def __init__(self):
@@ -261,8 +259,10 @@ class PatientManager:
         np.random.seed(random_state)
         random.seed(random_state)
         
-        # sorting ensures a reproduceable split of the ids. If the same ids are given in a different order to the method,
-        # without sorting it would result in a different split, even if random_state is the the same (and numpy.random.seed()).
+        # sorting ensures a reproduceable split of the ids. 
+        # If the same ids are given in a different order to the method,
+        # without sorting it would result in a different split, 
+        # even if random_state is the the same (and numpy.random.seed()).
         patient_ids = sorted(list(set([patient.patient_id for patient in self.patients])))
                 
         ids_train, ids_val, ids_test = splitter(patient_ids)              
@@ -301,8 +301,10 @@ class PatientManager:
         np.random.seed(random_state)
         random.seed(random_state)
         
-        # sorting ensures a reproduceable split of the ids. If the same ids are given in a different order to the method,
-        # without sorting it would result in a different split, even if random_state is the the same (and numpy.random.seed()).
+        # sorting ensures a reproduceable split of the ids. 
+        # If the same ids are given in a different order to the method,
+        # without sorting it would result in a different split, 
+        # even if random_state is the the same (and numpy.random.seed()).
         patient_ids.sort()
         
         # edge cases
@@ -367,8 +369,10 @@ class PatientManager:
         np.random.seed(random_state)
         random.seed(random_state)
         
-        # sorting ensures a reproduceable split of the ids. If the same ids are given in a different order to the method,
-        # without sorting it would result in a different split, even if random_state is the the same (and numpy.random.seed()).
+        # sorting ensures a reproduceable split of the ids. 
+        #If the same ids are given in a different order to the method,
+        # without sorting it would result in a different split, 
+        # even if random_state is the the same (and numpy.random.seed()).
         patient_ids.sort()
               
         kf = KFold(n_splits=n_splits, random_state=random_state, shuffle=shuffle)
@@ -408,7 +412,8 @@ class PatientManager:
 
     
     def get_patients(self, dataset_type:shared.enums.DatasetType)->List[shared.patient.Patient]:
-        return [p for p in self.patients if((dataset_type == shared.enums.DatasetType.all) or (p.dataset_type == dataset_type))]
+        return [p for p in self.patients if((dataset_type == shared.enums.DatasetType.all) 
+                                            or (p.dataset_type == dataset_type))]
     
     
     def __get_objects_according_to_evaluation_level(self, 
@@ -549,8 +554,9 @@ class PatientManager:
     
     
     def __remove_objects(self, 
-                         objs:List[Union[shared.tile.Tile, shared.wsi.WholeSlideImage, shared.case.Case]], verbose=False) \
-                            ->Dict[Union[shared.tile.Tile, shared.wsi.WholeSlideImage, shared.case.Case], bool]:
+                         objs:List[Union[shared.tile.Tile, shared.wsi.WholeSlideImage, shared.case.Case]], 
+                         verbose=False)\
+                        ->Dict[Union[shared.tile.Tile, shared.wsi.WholeSlideImage, shared.case.Case], bool]:
         #remove duplicates
         objs = list(set(objs))
         
@@ -597,14 +603,16 @@ class PatientManager:
         return self.__remove_objects(objs=cases, verbose=verbose)
     
 
-    def remove_slides(self, wsis:List[shared.wsi.WholeSlideImage], verbose=False)-> Dict[shared.wsi.WholeSlideImage, bool]:
+    def remove_slides(self, wsis:List[shared.wsi.WholeSlideImage], verbose=False)\
+                        -> Dict[shared.wsi.WholeSlideImage, bool]:
         """
         Looks for the given slide objects in patient manager's slides.
         If it is found, it removes it and returns True, otherwise False.
         Arguments:
         
         Return:
-           Dictionary with WholeSlideImage objects as keys and bool values. True means found and removed, False otherwise
+           Dictionary with WholeSlideImage objects as keys and bool values. True means found and removed, 
+           False otherwise
         """
         return self.__remove_objects(objs=wsis, verbose=verbose)
     
@@ -625,11 +633,23 @@ class PatientManager:
                    level:shared.enums.EvaluationLevel = shared.enums.EvaluationLevel.tile, 
                    dataset_type:shared.enums.DatasetType = shared.enums.DatasetType.train, 
                    delta:float=0.03, 
-                   verbose=False):
+                   verbose=False, 
+                   minimum_number_of_tiles:int = 50):
         """
-        Removes 
+        Removes cases/wsis/tiles (depending on the specified level) until the share of the most present class
+        and the share of the least present class only differ by the specified delta in the specified dataset type.
         
         Arguments:
+            level:
+                    case: removes whole cases
+                    slide: removes complete whole-slide images
+                    tile: removes only tiles
+            delta: the method stops removing cases/wsis/tiles as soon as the difference between the share of
+                    most present class and the least present class is smaller or equal to delta
+            verbose: if True some more info during the process is printed
+            minimum_number_of_tiles: only relevant if level == shared.enums.EvaluationLevel.tile;
+                                        a tile only gets removed, if there are at least <minimum_numer_of_tiles> tiles
+                                        left of its corresponding whole-slide image
         
         """
         
@@ -656,6 +676,19 @@ class PatientManager:
             objs_suitable_for_removal = [obj for obj in objs if(most_present_class_name in obj.get_labels() 
                                                                 and least_present_class_name not in obj.get_labels())]
             
+            # filter out all tiles, that shall not be removed, since there are only less than <minimum_number_of_tiles>
+            # tiles left of their corresponding whole-slide image
+            if(level == shared.enums.EvaluationLevel.tile):
+                objs_suitable_for_removal = [obj for obj in objs_suitable_for_removal 
+                                             if len(obj.roi.whole_slide_image.get_tiles()) >= minimum_number_of_tiles]
+                
+                # check if the amount of objs_suitable_for_removal is zero and return with a notice. 
+                # This would result in an endless loop otherwise.
+                if(len(objs_suitable_for_removal) == 0):
+                    print(f"Could not reach the desired delta of {delta}.\
+                            Only reached a delta of {most_present_class_percentage - least_present_class_percentage}\
+                            Try a smaller <minimum_number_of_tiles>.")
+                    return
             
             #remove a whole bunch at a time => faster
             n_to_remove = int((most_present_class_percentage - least_present_class_percentage)/30*len(objs))
@@ -668,8 +701,11 @@ class PatientManager:
 
             
 
-            
-from .patient import Patient
-from .case import Case
-from .wsi import WholeSlideImage
-from .tile import Tile
+import patient    
+import case
+import wsi
+import tile
+from patient import Patient
+from case import Case
+from wsi import WholeSlideImage
+from tile import Tile
