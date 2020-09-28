@@ -622,7 +622,7 @@ class Evaluator:
         for class_name in classes_to_show:
             guided_grad_cam_mask_denormed = GGC.generate_guided_grad_cam(input_image=x, 
                                                                          class_index=vocab.index(class_name), 
-                                                                         denorm=True)           
+                                                                         normalize=True)           
             _,ax = plt.subplots(figsize=figsize)
             ax.title.set_text(class_name)
             ax.imshow(guided_grad_cam_mask_denormed.permute(1,2,0))
