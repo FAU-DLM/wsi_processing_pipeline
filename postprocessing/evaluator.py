@@ -20,6 +20,7 @@ import math
 import sklearn
 import pandas
 import pandas as pd
+import PIL
 
 class Evaluator:
     predictor:postprocessing.predictor.Predictor = None
@@ -530,14 +531,57 @@ class Evaluator:
             
         return x, x_dec, classes_to_show
     
-
     def grad_cam(self, 
                  tile:shared.tile.Tile,
                  grad_cam_result:shared.enums.GradCamResult = shared.enums.GradCamResult.predicted,
                  thresholds:List[float] = None,                 
                  class_indices:List[int] = None, 
+                 model_layer = None)->Tuple[torch.Tensor, Dict[str, torch.Tensor]]:
+        """
+        Returns the tile image with a grad_cam for every class depending on the specified grad_cam_result parameter.
+        Arguments:
+            tile: one of patient_manager's tiles 
+            thresholds: One threshold for every class to determine predictions from the raw output percentages.
+            grad_cam_result: The grad_cam heatmap can be calculated for every possible class.
+                             shared.enums.GradCamResult.predicted: grad-cams for the classes, whose prediction score were above
+                                                                     the given threshold
+                             shared.enums.GradCamResult.targets: if targets are available (tile.get_labels()), grad-cams for the 
+                                                                 classes that are part of the target classes are shown
+            class_indices: Only relevant if <grad_cam_result> is set to None. You can specify for which classes
+                            the grad-cam heatmaps shall be calculated. See self.predictor.get_classes() or 
+                            learner.dls.vocab for the class order.
+            model_layer: The grad_cam heatmaps can be calculated for every layer of the model's body. By default this 
+                         library takes the last convolutional layer of the model's body, if no layer is specified.
+                         example of specifieng a layer: learner.model[0][-1] == last layer of model's body
+                         
+        Returns:
+            Tuple:
+                First position: The denormalized tile rgb image as a tensor with shape [channels, height, width]
+                Second position: Dictionary with the class names as keys and the grad_cam maps (torch.Tensor with shape 
+                                    [height, width]) as values
+        """
+        x, x_dec, classes_to_show = self.__common_trunk(tile=tile, 
+                                                        grad_cam_result=grad_cam_result, 
+                                                        thresholds=thresholds, 
+                                                        class_indices=class_indices, 
+                                                        model_layer=model_layer)        
+        cam_maps = {}
+        
+        grad_cam_extractor = GradCam(model = self.predictor.learner.model, model_layer = model_layer)
+        vocab = list(self.predictor.get_classes())
+        for class_name in classes_to_show:
+            cam_map = grad_cam_extractor.generate_cam(input_image = x, class_index = vocab.index(class_name))
+            cam_maps[class_name] = cam_map
+            
+        return x_dec, cam_maps
+    
+    def plot_grad_cam(self, 
+                 tile:shared.tile.Tile,
+                 grad_cam_result:shared.enums.GradCamResult = shared.enums.GradCamResult.predicted,
+                 thresholds:List[float] = None,                 
+                 class_indices:List[int] = None, 
                  model_layer = None, 
-                 figsize=(5,5)):
+                 figsize=(5,5))->PIL.Image.Image:
         """
         Plots image with grad_cam overlay.
         Arguments:
@@ -553,30 +597,28 @@ class Evaluator:
                             learner.dls.vocab for the class order.
             model_layer: The grad_cam heatmaps can be calculated for every layer of the model's body. By default this 
                          library takes the last convolutional layer of the model's body, if no layer is specified.
-                         example of specifieng a layer: learner.model[0][-1] == last layer of model's body
+                         example of specifieng a layer: learner.model[0][-1] == last layer of model's body  
             figsize: size of the resulting plot
-                         
-        Returns:
-            Plots the specfied image with grad-cam heatmap overlay.
-        """
-        x, x_dec, classes_to_show = self.__common_trunk(tile=tile, 
-                                                        grad_cam_result=grad_cam_result, 
-                                                        thresholds=thresholds, 
-                                                        class_indices=class_indices, 
-                                                        model_layer=model_layer)
-                
             
-        grad_cam_extractor = GradCam(model = self.predictor.learner.model, model_layer = model_layer)
+        Returns:
+            Plots the specfied image with grad-cam heatmap overlay for every class 
+            depending on the specified grad_cam_result.
+        """                        
+        x_dec, grad_cam_maps = self.grad_cam(tile=tile, 
+                                         grad_cam_result=grad_cam_result, 
+                                         thresholds=thresholds, 
+                                         class_indices=class_indices, 
+                                         model_layer=model_layer)
+        
         vocab = list(self.predictor.get_classes())
-        for class_name in classes_to_show:
-            cam_map = grad_cam_extractor.generate_cam(input_image = x, class_index = vocab.index(class_name))
+        for class_name, cam_map in grad_cam_maps.items():
             _,ax = plt.subplots(figsize=figsize)
             ax.title.set_text(class_name)
             x_dec.show(ctx=ax)
             ax.imshow(cam_map.detach().cpu(), alpha=0.6, interpolation='bilinear', cmap='magma');
             
 
-    def guided_grad_cam(self, 
+    def plot_guided_grad_cam(self, 
                          tile:shared.tile.Tile,
                          grad_cam_result:shared.enums.GradCamResult = shared.enums.GradCamResult.predicted,
                          thresholds:List[float] = None,                 
