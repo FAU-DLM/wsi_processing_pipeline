@@ -581,7 +581,7 @@ class Evaluator:
                  thresholds:List[float] = None,                 
                  class_indices:List[int] = None, 
                  model_layer = None, 
-                 figsize=(5,5))->PIL.Image.Image:
+                 figsize=(5,5)):
         """
         Plots image with grad_cam overlay.
         Arguments:
@@ -617,7 +617,56 @@ class Evaluator:
             x_dec.show(ctx=ax)
             ax.imshow(cam_map.detach().cpu(), alpha=0.6, interpolation='bilinear', cmap='magma');
             
-
+    def guided_grad_cam(self, 
+                         tile:shared.tile.Tile,
+                         grad_cam_result:shared.enums.GradCamResult = shared.enums.GradCamResult.predicted,
+                         thresholds:List[float] = None,                 
+                         class_indices:List[int] = None, 
+                         model_layer = None)->Tuple[torch.Tensor, Dict[str, torch.Tensor]]:
+        """
+        Returns the tile image with a guided grad_cam for every class depending on the specified grad_cam_result parameter.
+        Arguments:
+            tile: one of patient_manager's tiles 
+            thresholds: One threshold for every class to determine predictions from the raw output percentages.
+            grad_cam_result: The guided grad-cam mask can be calculated for every possible class.
+                             shared.enums.GradCamResult.predicted: grad-cams for the classes, whose prediction score 
+                                                                     were above the given threshold
+                             shared.enums.GradCamResult.targets: if targets are available (tile.get_labels()), 
+                                                                 grad-cams for the 
+                                                                 classes that are part of the target classes are shown
+            class_indices: Only relevant if <grad_cam_result> is set to None. You can specify for which classes
+                            the grad-cam heatmaps shall be calculated. See self.predictor.get_classes() or 
+                            learner.dls.vocab for the class order.
+            model_layer: To calculate the guided grad-cam mask, a grad-cam is calculated. 
+                         The grad_cam can be calculated for every layer of the model's body. By default this 
+                         library takes the last convolutional layer of the model's body, if no layer is specified.
+                         example of specifieng a layer: learner.model[0][-1] == last layer of model's body
+            figsize: size of the resulting plot
+            
+        Returns:
+            Tuple:
+                First position: The denormalized tile rgb image as a tensor with shape [channels, height, width]
+                Second position: Dictionary with the class names as keys and the guided 
+                                    grad_cam maps (torch.Tensor with shape [height, width]) as values
+        """
+        x, x_dec, classes_to_show = self.__common_trunk(tile=tile, 
+                                                        grad_cam_result=grad_cam_result, 
+                                                        thresholds=thresholds, 
+                                                        class_indices=class_indices, 
+                                                        model_layer=model_layer)
+            
+        GGC = GuidedGradCam(self.predictor.learner.model)
+        vocab = list(self.predictor.get_classes())
+        
+        guided_grad_cam_maps = {}
+        for class_name in classes_to_show:
+            guided_grad_cam_mask = GGC.generate_guided_grad_cam(input_image=x, 
+                                                                class_index=vocab.index(class_name), 
+                                                                normalize=True)           
+            guided_grad_cam_maps[class_name] = guided_grad_cam_mask
+            
+        return x_dec, guided_grad_cam_maps
+            
     def plot_guided_grad_cam(self, 
                          tile:shared.tile.Tile,
                          grad_cam_result:shared.enums.GradCamResult = shared.enums.GradCamResult.predicted,
@@ -648,23 +697,18 @@ class Evaluator:
         Returns:
             Plots the original HE tile with guided grad cam maps for the different classes
         """
-        x, x_dec, classes_to_show = self.__common_trunk(tile=tile, 
-                                                        grad_cam_result=grad_cam_result, 
-                                                        thresholds=thresholds, 
-                                                        class_indices=class_indices, 
-                                                        model_layer=model_layer)
-            
-        GGC = GuidedGradCam(self.predictor.learner.model)
+        x_dec, guided_grad_cam_maps = self.guided_grad_cam(tile=tile, 
+                                         grad_cam_result=grad_cam_result, 
+                                         thresholds=thresholds, 
+                                         class_indices=class_indices, 
+                                         model_layer=model_layer)
         vocab = list(self.predictor.get_classes())
         
         _, ax = plt.subplots(figsize=figsize)
         ax.title.set_text('HE')
         ax.imshow(tile.get_pil_image())
         
-        for class_name in classes_to_show:
-            guided_grad_cam_mask_denormed = GGC.generate_guided_grad_cam(input_image=x, 
-                                                                         class_index=vocab.index(class_name), 
-                                                                         normalize=True)           
+        for class_name, guided_grad_cam in guided_grad_cam_maps.items():         
             _,ax = plt.subplots(figsize=figsize)
             ax.title.set_text(class_name)
-            ax.imshow(guided_grad_cam_mask_denormed.permute(1,2,0))
+            ax.imshow(guided_grad_cam.permute(1,2,0))
