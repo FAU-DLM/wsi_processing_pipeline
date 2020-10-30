@@ -77,7 +77,7 @@ class PatientManager:
         
         #key: patient_id; value: Patient object
         patient_id_to_patient = {}
-        for tilesummary in tilesummaries:
+        for tilesummary in tqdm(tilesummaries):
             ###
             # patient
             ###
@@ -188,7 +188,7 @@ class PatientManager:
         
         #key: patient_id; value: Patient object
         patient_id_to_patient = {}
-        for tile_path in tile_paths:
+        for tile_path in tqdm(tile_paths):
             ###
             # patient
             ###
