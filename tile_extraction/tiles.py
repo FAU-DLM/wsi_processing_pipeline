@@ -39,11 +39,13 @@ import pandas
 import pandas as pd
 import warnings
 from enum import Enum
-
+import shapely
 
 
 import util, filter, slide, openslide_overwrite
 from util import *
+import shared
+from shared import roi
 from shared.tile import Tile
 from shared.roi import *
 from shared.enums import DatasetType, TissueQuantity
@@ -262,7 +264,7 @@ class TileSummary:
                 self.minimal_acceptable_tile_height*self.orig_tile_h
         
 
-    def show_wsi_with_marked_tiles(self, 
+    def show_wsi_with_top_tiles(self, 
                                    figsize:Tuple[int] = (10,10),
                                    scale_factor:int = 32, 
                                    axis_off:bool = False):
@@ -277,18 +279,23 @@ class TileSummary:
         wsi_pil, large_w, large_h, new_w, new_h, best_level_for_downsample = wsi_to_scaled_pil_image(self.wsi_path,                                                                                                scale_factor=self.scale_factor,
                                                                                                      level=0)                                                                  
         wsi_np = util.pil_to_np_rgb(wsi_pil)
-        boxes =[]
         
+        tiles_np = []
         for tile in self.top_tiles():
             x = util.adjust_level(tile.get_x(), tile.level, best_level_for_downsample)
             y = util.adjust_level(tile.get_y(), tile.level, best_level_for_downsample)
             width = util.adjust_level(tile.get_width(), tile.level, best_level_for_downsample)
-            height = util.adjust_level(tile.get_height(), tile.level, best_level_for_downsample)
-            box = np.array([x,y,width,height])
-            boxes.append(box)
-        util.show_np_with_bboxes(wsi_np, boxes, figsize, axis_off=axis_off)
-        
-        
+            height = util.adjust_level(tile.get_height(), tile.level, best_level_for_downsample)          
+            tiles_np.append(np.array([[x,y],[x+width, y],[x+width, y+height],[x, y+height]]))
+            
+        rois_np = []
+        for roi in self.rois:
+            roi_adjusted = roi.change_level_deep_copy(new_level = best_level_for_downsample)
+            rois_np.append(util.polygon_to_numpy(roi_adjusted.polygon))
+                
+        util.show_np_img_with_polygons(img=wsi_np, polygons_np=tiles_np+rois_np, figsize=figsize, axis_off=axis_off)
+
+                                 
     def show_wsi_with_rois(self, 
                            figsize:Tuple[int] = (10,10),
                            scale_factor:int = 32):
@@ -397,8 +404,9 @@ def WsiOrROIToTiles(wsi_path:pathlib.Path,
                tile_scoring_function = scoring_function_1,
                level = 0, 
                save_tiles:bool = False, 
-               return_as_tilesummary_object = False, 
-               rois:List[RegionOfInterestDefinedByCoordinates] = None, 
+               return_as_tilesummary_object = True, 
+               rois:List[shared.roi.RegionOfInterestPolygon] = None,
+               minimal_tile_roi_intersection_ratio:float = 1.0,     
                verbose=False)-> Union[TileSummary, pandas.DataFrame]:
     """
     Calculates tile coordinates and returns a TileSummary object. If save_tiles == True the tiles will also be extracted
@@ -427,6 +435,9 @@ def WsiOrROIToTiles(wsi_path:pathlib.Path,
     return_as_tilesummary_object: return_as_tilesummary_object: Set this to true, if you 
                                     want the TileSummary object and not a pandas dataframe.
     rois: If rois are specified, only tissue inside these rois will be extracted
+    minimal_tile_roi_intersection_ratio: [0.0, 1.0] 
+                                         (intersection area between roi and tile)/tile area >= tile_roi_intersection_ratio so 
+                                          that a tile will be used for further calculations
     Return:
     if return_as_tilesummary_object == True:
        a TileSummary object will be returned
@@ -468,7 +479,8 @@ def WsiOrROIToTiles(wsi_path:pathlib.Path,
                                      tile_naming_func=tile_naming_func, 
                                      level=level, 
                                      best_level_for_downsample=best_level_for_downsample, 
-                                     rois=rois, 
+                                     rois=rois,
+                                     minimal_tile_roi_intersection_ratio=minimal_tile_roi_intersection_ratio,
                                      verbose=verbose)
     
     if(save_tiles):
@@ -511,7 +523,8 @@ def WsiOrROIToTilesMultithreaded(wsi_paths:List[pathlib.Path],
                              level = 0, 
                              save_tiles:bool = False, 
                              return_as_tilesummary_object = False, 
-                             wsi_path_to_rois:Dict = None, 
+                             wsi_path_to_rois:Dict[pathlib.Path, shared.roi.RegionOfInterestPolygon] = None,
+                             minimal_tile_roi_intersection_ratio:float = 1.0,
                              verbose=False)-> Union[List[TileSummary], pandas.DataFrame]:
     """
     The method WsiOrROIToTiles for a list of WSIs/ROIs in parallel on multiple threads.
@@ -535,7 +548,10 @@ def WsiOrROIToTilesMultithreaded(wsi_paths:List[pathlib.Path],
             0.
     save_tiles: if True the tiles will be extracted and saved to {tilesFolderPath}
     return_as_tilesummary_object: Set this to true, if you want the TileSummary object and not a pandas dataframe.
-    wsi_path_to_rois: a dict with key: wsi_path and value RegionOfInterestDefinedByCoordinates object. 
+    wsi_path_to_rois: a dict with key: wsi_path and value RegionOfInterestPolygon object.
+    minimal_tile_roi_intersection_ratio: [0.0, 1.0] 
+                                         (intersection area between roi and tile)/tile area >= tile_roi_intersection_ratio so 
+                                          that a tile will be used for further calculations
     Return:
     if return_as_tilesummary_object == True:
        a List of TileSummary objects will be returned
@@ -567,7 +583,8 @@ def WsiOrROIToTilesMultithreaded(wsi_paths:List[pathlib.Path],
                                    "level":level, 
                                    "save_tiles":save_tiles, 
                                    "return_as_tilesummary_object":return_as_tilesummary_object, 
-                                   "rois":util.safe_dict_access(wsi_path_to_rois, p), 
+                                   "rois":util.safe_dict_access(wsi_path_to_rois, p),
+                                   "minimal_tile_roi_intersection_ratio":minimal_tile_roi_intersection_ratio,
                                    "verbose":verbose}, 
                                    callback=update, 
                                    error_callback=error)
@@ -637,7 +654,8 @@ def create_tilesummary(wsiPath,
                         tile_naming_func, 
                         level:int, 
                         best_level_for_downsample:int, 
-                        rois:List[RegionOfInterestDefinedByCoordinates] = None, 
+                        rois:List[shared.roi.RegionOfInterestPolygon] = None,
+                        minimal_tile_roi_intersection_ratio:float = 1.0,
                         verbose=False)->TileSummary:
     """
   
@@ -647,7 +665,7 @@ def create_tilesummary(wsiPath,
         scale_factor: the scale_factor specified by the user
         best_level_for_downsample: result of openslide.OpenSlide.get_best_level_for_downsample(scale_factor)
     """
-
+    
     np_img = util.pil_to_np_rgb(img_pil)
     np_img_filtered = util.pil_to_np_rgb(img_pil_filtered)
 
@@ -669,7 +687,8 @@ def create_tilesummary(wsiPath,
                            tile_naming_func=tile_naming_func, 
                            level=level, 
                            best_level_for_downsample=best_level_for_downsample, 
-                           rois=rois, 
+                           rois=rois,
+                           minimal_tile_roi_intersection_ratio = minimal_tile_roi_intersection_ratio,
                            verbose=verbose)    
     return tile_sum
 
@@ -801,7 +820,14 @@ def save_display_tile(tile, save, display):
   if display:
     tile_pil_img.show()
 
-    
+def is_tile_in_one_of_the_rois(rois:List[shared.roi.RegionOfInterestPolygon], 
+                               tile:shapely.geometry.Polygon, 
+                               minimal_tile_roi_intersection_ratio:float)->bool:
+    for roi in rois:
+        if((roi.polygon.intersection(tile).area/tile.area) >= minimal_tile_roi_intersection_ratio):
+            return True
+    return False
+
 def score_tiles(img_np:np.array, 
                 img_np_filtered:np.array, 
                 wsi_path:pathlib.Path,
@@ -820,7 +846,8 @@ def score_tiles(img_np:np.array,
                 tile_naming_func, 
                 level:int, 
                 best_level_for_downsample:int, 
-                rois:List[RegionOfInterestDefinedByCoordinates]=None, 
+                rois:List[shared.roi.RegionOfInterestPolygon]=None,
+                minimal_tile_roi_intersection_ratio:float = 1.0,
                 verbose=False) -> TileSummary:
     """
     Scores all tiles for a slide and returns the results in a TileSummary object.
@@ -841,12 +868,21 @@ def score_tiles(img_np:np.array,
     
     #if no rois are specified, just create one "fake" roi, that is as big as the whole image
     if(rois is None or len(rois) == 0):
-        rois = [RegionOfInterestDefinedByCoordinates(roi_id = wsi_path, 
-                                                     x_upper_left = 0, 
-                                                     y_upper_left = 0, 
-                                                     height = wsi_original_height, 
-                                                     width = wsi_original_width, 
-                                                     level = level)]
+        rois = [shared.roi.RegionOfInterestPolygon(roi_id = wsi_path,
+                                          vertices = np.array([[0,0], [0, wsi_original_width], \
+                                                               [wsi_original_width, wsi_original_height], \
+                                                               [0, wsi_original_height]]),
+                                          level = level)]
+    
+    
+    #print(rois)
+    
+    # if roi level and tile extraction level differ, adjust roi dimensions to the tile level 
+    # e.g. roi level is 0, tile level is 2 -> divide roi dimensions by 2^(2-0)
+    #for roi in rois:       
+    #    if roi.level != level:
+    #        roi.change_level_in_place(level)
+    
     
     real_scale_factor = int(math.pow(2,best_level_for_downsample-level))
     tile_height_scaled = util.adjust_level(tile_height, level, best_level_for_downsample)
@@ -886,58 +922,64 @@ def score_tiles(img_np:np.array,
     medium = 0
     low = 0
     none = 0
-        
+    
+    
+    rois_downsample_level = []
     for roi in rois:
-        # if roi level and tile extraction level differ, adjust roi dimensions to the tile level 
-        # e.g. roi level is 0, tile level is 2 -> divide roi dimensions by 2^(2-0)
-        if roi.level != level:
-            roi.change_level_in_place(level)
+        rois_downsample_level.append(roi.change_level_deep_copy(new_level=best_level_for_downsample))
+    
+    tile_indices = get_tile_indices(wsi_scaled_height, wsi_scaled_width, tile_height_scaled, tile_width_scaled)
+    for ti in tile_indices:
+        #coordinates with respect to upper left point of wsi as (0,0) on the level chosen for downsampling
+        #r_s: row_start, r_e: row_end  (pixel values in y-dimension)
+        #c_s: column_start, c_e: column_end (pixel values in x-dimension)
+        #r: row number (starting at 1 and number of rows is
+        #heigt of the image divided by tile's height)
+        #c: column number (starting at 1 and number of columns is
+        #width of the image divided by tile's width)
+        r_s, r_e, c_s, c_e, r, c = ti
                 
-        roi_scaled = roi.change_level_deep_copy(best_level_for_downsample)
-        
-        tile_indices = get_tile_indices(roi_scaled.height, roi_scaled.width, tile_height_scaled, tile_width_scaled)
-        for t in tile_indices:
-            count += 1  # tile_num
+        #o_c_s: original_column_start, etc. pixel values with respect to the desired tile_extraction level
+        o_c_s, o_r_s = slide.small_to_large_mapping((c_s, r_s), (wsi_original_width, wsi_original_height), real_scale_factor)
+        #print("o_c_s: " + str(o_c_s))
+        #print("o_r_s: " + str(o_r_s))
+        o_c_e, o_r_e = slide.small_to_large_mapping((c_e, r_e), (wsi_original_width, wsi_original_height), real_scale_factor)
+        #print("o_c_e: " + str(o_c_e))
+        #print("o_r_e: " + str(o_r_e))
 
-            #coordinates with respect to upper left point of roi as (0,0)
-            r_s, r_e, c_s, c_e, r, c = t
+        # pixel adjustment in case tile dimension too large (for example, 1025 instead of 1024)
+        if (o_c_e - o_c_s) > tile_width:
+            o_c_e -= 1
+        if (o_r_e - o_r_s) > tile_height:
+            o_r_e -= 1
 
-            #coordinates with respect to upper left point of wsi as (0,0)
-            r_s += roi_scaled.y_upper_left
-            r_e += roi_scaled.y_upper_left
-            c_s += roi_scaled.x_upper_left
-            c_e += roi_scaled.x_upper_left
-
-
-            np_scaled_filtered_tile = img_np_filtered[int(r_s):int(r_e), int(c_s):int(c_e)]
-            t_p = filter.tissue_percent(np_scaled_filtered_tile)
-            amount = tissue_quantity(t_p)
-            if amount == TissueQuantity.HIGH:
-                high += 1
-            elif amount == TissueQuantity.MEDIUM:
-                medium += 1
-            elif amount == TissueQuantity.LOW:
-                low += 1
-            elif amount == TissueQuantity.NONE:
-                none += 1
+        # short circuit here, if the tile is not in one of the rois
+        tile_polygon = shapely.geometry.box(minx=o_c_s, miny=o_r_s, maxx=o_c_e, maxy=o_r_e)
+        if(not is_tile_in_one_of_the_rois(rois=rois, 
+                                      tile=tile_polygon, 
+                                      minimal_tile_roi_intersection_ratio=minimal_tile_roi_intersection_ratio)):
+            continue
+                
+        count += 1  # tile_num            
             
-            o_c_s, o_r_s = slide.small_to_large_mapping((c_s, r_s), (wsi_original_width, wsi_original_height), real_scale_factor)
-            #print("o_c_s: " + str(o_c_s))
-            #print("o_r_s: " + str(o_r_s))
-            o_c_e, o_r_e = slide.small_to_large_mapping((c_e, r_e), (wsi_original_width, wsi_original_height), real_scale_factor)
-            #print("o_c_e: " + str(o_c_e))
-            #print("o_r_e: " + str(o_r_e))
+            
+            
+        np_scaled_filtered_tile = img_np_filtered[int(r_s):int(r_e), int(c_s):int(c_e)]
+        t_p = filter.tissue_percent(np_scaled_filtered_tile)
+        amount = tissue_quantity(t_p)
+        if amount == TissueQuantity.HIGH:
+            high += 1
+        elif amount == TissueQuantity.MEDIUM:
+            medium += 1
+        elif amount == TissueQuantity.LOW:
+            low += 1
+        elif amount == TissueQuantity.NONE:
+            none += 1
 
-            # pixel adjustment in case tile dimension too large (for example, 1025 instead of 1024)
-            if (o_c_e - o_c_s) > tile_width:
-                o_c_e -= 1
-            if (o_r_e - o_r_s) > tile_height:
-                o_r_e -= 1
-
-            score, color_factor, s_and_v_factor, quantity_factor = score_tile(np_scaled_filtered_tile, t_p, r, c, 
+        score, color_factor, s_and_v_factor, quantity_factor = score_tile(np_scaled_filtered_tile, t_p, r, c, 
                                                                               tile_scoring_function)
        
-            tile = Tile(tile_summary=tile_sum, 
+        tile = Tile(tile_summary=tile_sum, 
                          tiles_folder_path=tiles_folder_path, 
                          np_scaled_filtered_tile=np_scaled_filtered_tile, 
                          tile_num = count, 
@@ -962,7 +1004,7 @@ def score_tiles(img_np:np.array,
                          real_scale_factor=real_scale_factor, 
                          roi=roi)
             
-            tile_sum.tiles.append(tile)
+        tile_sum.tiles.append(tile)
 
 
     tile_sum.count = count

@@ -32,13 +32,23 @@ import tile_extraction
 from tile_extraction import tiles
 from tiles import *
 from shared.roi import *
+import shapely
 
 # If True, display additional NumPy array stats (min, max, mean, is_binary).
 ADDITIONAL_NP_STATS = False
 
 
+def polygon_to_numpy(polygon:shapely.geometry.Polygon)->np.ndarray:
+    """
+    Converts shapely.geometry.Polygon into numpy array of the shape [number_of_vertices, 2] ( == x-,y-coordinate)
+    """
+    #first and last point are identical
+    x_values = polygon.exterior.coords.xy[0][:-1]
+    y_values = polygon.exterior.coords.xy[1][:-1]
+    return np.array([[x,y] for x,y in zip(x_values, y_values)])
+
 def show_wsi_with_rois(wsi_path:pathlib.Path, 
-                       rois:List[RegionOfInterest], 
+                       rois:List[RegionOfInterestPolygon], 
                        figsize:Tuple[int] = (10,10), 
                        scale_factor:int = 32,
                        axis_off:bool = False):
@@ -59,12 +69,13 @@ def show_wsi_with_rois(wsi_path:pathlib.Path,
                                                                                             scale_factor=scale_factor,
                                                                                             level=0)
         wsi_np = pil_to_np_rgb(wsi_pil)
-        boxes =[]
+        rois_level_adjusted_numpy = []
         for roi in rois:
             roi_adj = roi.change_level_deep_copy(new_level=best_level_for_downsample)
-            box = np.array([roi_adj.x_upper_left, roi_adj.y_upper_left, roi_adj.width, roi_adj.height])
-            boxes.append(box)
-        show_np_with_bboxes(wsi_np, boxes, figsize, axis_off=axis_off)
+            #see constructor of matplotlib's Polygon: matplotlib.patches.Polygon
+            #it expects the coordinates as a numpy array of the shape [number_of_points x 2 ( == x-,y-coordinates)]
+            rois_level_adjusted_numpy.append(roi_adj.get_vertices())
+        show_np_img_with_polygons(wsi_np, rois_level_adjusted_numpy, figsize, axis_off=axis_off)
         
         
 def adjust_level(value_to_adjust:int, from_level:int, to_level:int)->int:
@@ -93,13 +104,14 @@ def safe_dict_access(dict:Dict, key):
     except:
         return None
 
-def show_np_with_bboxes(img:numpy.ndarray, bboxes:List[numpy.ndarray], figsize:tuple=(10,10), axis_off:bool=False):
+def show_np_img_with_polygons(img:numpy.ndarray, 
+                                polygons_np:List[numpy.ndarray], 
+                                figsize:tuple=(10,10), 
+                                axis_off:bool=False):
     """
     Arguments:
         img: img as numpy array
-        bboxes: List of bounding boxes where each bbox is a numpy array: 
-                array([ x-upper-left, y-upper-left,  width,  height]) 
-                e.g. array([ 50., 211.,  17.,  19.])
+        polygons_np: List of polygons where each polygon is a numpy array of shape [number_of_vertices x 2 ( == x-,y-coordinates)]
         axis_off: bool value that indicates, if axis shall be plotted with the picture
     """    
     # Create figure and axes
@@ -110,11 +122,11 @@ def show_np_with_bboxes(img:numpy.ndarray, bboxes:List[numpy.ndarray], figsize:t
     if(axis_off):
         ax.axis('off')
         
-    # Create a Rectangle patch for each bbox
-    for b in bboxes:
-        rect = matplotlib.patches.Rectangle((b[0],b[1]),b[2],b[3],linewidth=1,edgecolor='r',facecolor='none')    
+    # Create a polygonal patch for each roi
+    for p in polygons_np:
+        polygon = matplotlib.patches.Polygon(xy=p, closed=True, linewidth=1, edgecolor='r', facecolor='none')    
         # Add the patch to the Axes
-        ax.add_patch(rect)    
+        ax.add_patch(polygon)    
     plt.show() 
 
 
