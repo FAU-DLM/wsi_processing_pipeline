@@ -869,9 +869,9 @@ def score_tiles(img_np:np.array,
     #if no rois are specified, just create one "fake" roi, that is as big as the whole image
     if(rois is None or len(rois) == 0):
         rois = [shared.roi.RegionOfInterestPolygon(roi_id = wsi_path,
-                                          vertices = np.array([[0,0], [0, wsi_original_width], \
+                                          vertices = np.array([[0,0], [0, wsi_original_height], \
                                                                [wsi_original_width, wsi_original_height], \
-                                                               [0, wsi_original_height]]),
+                                                               [wsi_original_width, 0]]),
                                           level = level)]
     
     
