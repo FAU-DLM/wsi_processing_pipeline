@@ -37,6 +37,20 @@ class RegionOfInterestPreextracted(RegionOfInterest):
         super().__init__(roi_id = roi_id, whole_slide_image = whole_slide_image)
         self.path = path
 
+        
+        
+def get_list_of_RegionOfInterestPolygon_from_json(json_path:pathlib.Path)->List[RegionOfInterestPolygon]:
+    rois_poly = []
+    with open(json_path) as json_file:
+        data = json.load(json_file)
+        for n, polygon_coords in enumerate(data):
+            coordinates = polygon_coords["geometry"]["coordinates"][0]
+            coordinates = np.array(coordinates)
+            roi = RegionOfInterestPolygon(roi_id=n, vertices=coordinates, level=0)
+            rois_poly.append(roi)
+            
+    return rois_poly        
+
 class RegionOfInterestPolygon(RegionOfInterest):
     """
     represents a polygonal region of interest within a whole-slide image
