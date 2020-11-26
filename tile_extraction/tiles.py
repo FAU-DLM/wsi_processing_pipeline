@@ -523,7 +523,7 @@ def WsiOrROIToTilesMultithreaded(wsi_paths:List[pathlib.Path],
                              level = 0, 
                              save_tiles:bool = False, 
                              return_as_tilesummary_object = False, 
-                             wsi_path_to_rois:Dict[pathlib.Path, shared.roi.RegionOfInterestPolygon] = None,
+                             wsi_path_to_rois:Dict[pathlib.Path, List[shared.roi.RegionOfInterestPolygon]] = None,
                              minimal_tile_roi_intersection_ratio:float = 1.0,
                              verbose=False)-> Union[List[TileSummary], pandas.DataFrame]:
     """
@@ -548,7 +548,7 @@ def WsiOrROIToTilesMultithreaded(wsi_paths:List[pathlib.Path],
             0.
     save_tiles: if True the tiles will be extracted and saved to {tilesFolderPath}
     return_as_tilesummary_object: Set this to true, if you want the TileSummary object and not a pandas dataframe.
-    wsi_path_to_rois: a dict with key: wsi_path and value RegionOfInterestPolygon object.
+    wsi_path_to_rois: a dict with key: wsi_path and value List[shared.roi.RegionOfInterestPolygon]].
     minimal_tile_roi_intersection_ratio: [0.0, 1.0] 
                                          (intersection area between roi and tile)/tile area >= tile_roi_intersection_ratio so 
                                           that a tile will be used for further calculations
