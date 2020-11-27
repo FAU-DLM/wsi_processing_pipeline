@@ -1,6 +1,6 @@
 from __future__ import annotations #https://stackoverflow.com/questions/33837918/type-hints-solve-circular-dependency
 
-from typing import List, Tuple, Union
+from typing import List, Tuple, Union, Sequence
 from shared.wsi import WholeSlideImage
 from shared.case import Case
 from tile_extraction import util
@@ -39,18 +39,6 @@ class RegionOfInterestPreextracted(RegionOfInterest):
         self.path = path
 
         
-        
-def get_list_of_RegionOfInterestPolygon_from_json(json_path:pathlib.Path)->List[RegionOfInterestPolygon]:
-    rois_poly = []
-    with open(json_path) as json_file:
-        data = json.load(json_file)
-        for n, polygon_coords in enumerate(data):
-            coordinates = polygon_coords["geometry"]["coordinates"][0]
-            coordinates = np.array(coordinates)
-            roi = RegionOfInterestPolygon(roi_id=n, vertices=coordinates, level=0)
-            rois_poly.append(roi)
-            
-    return rois_poly        
 
 class RegionOfInterestPolygon(RegionOfInterest):
     """
@@ -106,63 +94,69 @@ class RegionOfInterestPolygon(RegionOfInterest):
         dc.change_level_in_place(new_level=new_level)
         return dc
     
-#class RegionOfInterestDefinedByCoordinates(RegionOfInterest):
-#    """
-#    represents a region of interest within a whole-slide image
-#    """
-#    x_upper_left:int = None
-#    y_upper_left:int = None
-#    height:int = None
-#    width:int = None
-#    level:int = None
-#
-#    def __init__(self,
-#                 roi_id:str,
-#                 x_upper_left:int, 
-#                 y_upper_left:int, 
-#                 height:int, 
-#                 width:int, 
-#                 level:int):
-#        """
-#            Arguments:
-#            roi_id:
-#            x_upper_left: x coordinate of roi's upper left point
-#            y_upper_left: y coordinate of roi's upper left point
-#            height: roi's height in pixel
-#            width: roi's width in pixel
-#            level: level of the whole-slide image. 0 means highest resolution. Leave it 0 if you use e.g. png files instead of a 
-#                    whole-slide image format like .ndpi
-#        """
-#        super().__init__(roi_id = roi_id, whole_slide_image = None)
-#        self.x_upper_left = x_upper_left
-#        self.y_upper_left = y_upper_left
-#        self.height = height
-#        self.width = width
-#        self.level = level
-#        
-#    def __repr__(self):
-#        return f"x: {self.x_upper_left}, y: {self.y_upper_left}, height: {self.height}, width: {self.width}, level: {self.level}"
-#        
-#    def change_level_in_place(self, new_level:int):
-#        """
-#        adjusts all properties to new level in place and also returns itself
-#        """
-#        self.x_upper_left = util.adjust_level(value_to_adjust=self.x_upper_left, from_level=self.level, to_level=new_level)
-#        self.y_upper_left = util.adjust_level(value_to_adjust=self.y_upper_left, from_level=self.level, to_level=new_level)
-#        self.height = util.adjust_level(value_to_adjust=self.height, from_level=self.level, to_level=new_level)
-#        self.width = util.adjust_level(value_to_adjust=self.width, from_level=self.level, to_level=new_level)
-#        self.level = new_level
-#        return self
-#    
-#    def change_level_deep_copy(self, new_level:int):
-#        """
-#        returns deep copy of itself with adjusted properties
-#        """
-#        dc = copy.deepcopy(self)
-#        dc.x_upper_left = util.adjust_level(value_to_adjust=self.x_upper_left, from_level=self.level, to_level=new_level)
-#        dc.y_upper_left = util.adjust_level(value_to_adjust=self.y_upper_left, from_level=self.level, to_level=new_level)
-#        dc.height = util.adjust_level(value_to_adjust=self.height, from_level=self.level, to_level=new_level)
-#        dc.width = util.adjust_level(value_to_adjust=self.width, from_level=self.level, to_level=new_level)
-#        dc.level = new_level
-#        return dc
-#    
+
+
+class __PolygonHelper:
+    def __init__(self, level:int, vertices:Sequence[Tuple[float, float]]):
+        self.level = level
+        self.vertices = vertices
+
+def __get_polygons_from_json(json_path:pathlib.Path)->List[__PolygonHelper]:
+    """
+    Reads the json file and returns a list of __PolygonHelper objects. 
+    This should be a specialized function for the specific structure of your json files.
+    
+    Arguments:
+        json_path: path to json file
+        
+    Returns:
+        List of __PolygonHelper objects
+    """
+    polygons = []
+    with open(json_path) as json_file:
+        for polygon_coords in json.load(json_file):
+            coords_raw = polygon_coords["geometry"]["coordinates"]
+            
+            #QuPath produces Polygons and Multipolygons 
+            #(see difference here: https://gis.stackexchange.com/questions/225368/understanding-difference-between-polygon-and-multipolygon-for-shapefiles-in-qgis/225373)
+            #This loop separates Multipolygons into individual Polygons
+            for vertices in coords_raw:
+                #all polygons on level 0 by default in this case
+                polygons.append(__PolygonHelper(level=0, vertices=np.array(vertices).squeeze()))
+    return polygons
+
+def __validate_polygons(polygons:Sequence[__PolygonHelper])->Sequence[__PolygonHelper]:
+    """
+    Validates and if necessary fixes issues of the vertices of a sequence of polygons.
+    Migth even delete a "polygon" if it consists of less than three vertices.
+    E.g. solves self-intersections etc.
+      
+    Arguments:
+        polygons: A sequence of __PolygonHelper objects.
+    Returns:
+        A new validated sequence of __PolygonHelper objects.
+    """
+    
+    validated_polygons = []
+    for polygon in polygons:
+        #remove structures with less than three vertices
+        if(len(polygon.vertices) >= 3):
+            #TODO: wite some more validation steps here if necessary
+            validated_polygons.append(polygon)
+            
+    return validated_polygons
+    
+    
+def get_list_of_RegionOfInterestPolygon_from_json(json_path:pathlib.Path, 
+                                                  polygons_from_json_func:Callable=__get_polygons_from_json, 
+                                                  validate_polygons_func:Callable=__validate_polygons)\
+                                                    ->List[RegionOfInterestPolygon]:
+    """
+    Arguments:
+        json_path: path to json file
+        polygons_from_json_func: A function that reads the json file and returns a list of __PolygonHelper objects.
+        validate_polygons_func: A function that validates if necessary fixes a list of __PolygonHelper objects.
+        
+    """    
+    return [RegionOfInterestPolygon(roi_id=n, vertices=polygon_helper.vertices, level=polygon_helper.level)\
+            for n, polygon_helper in enumerate(validate_polygons_func(polygons_from_json_func(json_path)))]
