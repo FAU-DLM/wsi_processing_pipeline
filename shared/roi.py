@@ -8,6 +8,7 @@ import copy
 import shapely
 from shapely.geometry import Polygon, Point
 import numpy as np
+import json
 
 from abc import ABC, abstractmethod
 class RegionOfInterest(ABC):
