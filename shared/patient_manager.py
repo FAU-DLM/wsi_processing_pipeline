@@ -328,7 +328,7 @@ class PatientManager:
                                                             stratify=None)
             #update train_size to get the train_size of all patient_ids
             train_size = train_size/(1-test_size)
-            train_ids, val_ids = sklearn.model_selection.train_test_split(patient_ids, 
+            train_ids, val_ids = sklearn.model_selection.train_test_split(train_and_val_ids, 
                                                             train_size=train_size, 
                                                             #test_size=1-train_size, #not necessary
                                                             random_state=random_state, 
