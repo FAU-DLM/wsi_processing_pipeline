@@ -408,13 +408,30 @@ def WsiOrROIToTiles(wsi_path:pathlib.Path,
                rois:List[shared.roi.RegionOfInterestPolygon] = None,
                minimal_tile_roi_intersection_ratio:float = 1.0,     
                verbose=False)-> Union[TileSummary, pandas.DataFrame]:
+    raise DeprecationWarning('The function WsiOrRoiToTiles was renamed to WsiToTiles')
+
+
+def WsiToTiles(wsi_path:pathlib.Path, 
+               tile_height:int, 
+               tile_width:int,
+               minimal_acceptable_tile_height:float = 0.7,
+               minimal_acceptable_tile_width:float = 0.7,
+               tile_naming_func:Callable = tile_naming_function_default,
+               tile_score_thresh:float = 0.55,
+               tile_scoring_function = scoring_function_1,
+               level = 0, 
+               save_tiles:bool = False,
+               tiles_folder_path:pathlib.Path = None,
+               return_as_tilesummary_object = True, 
+               rois:List[shared.roi.RegionOfInterestPolygon] = None,
+               minimal_tile_roi_intersection_ratio:float = 1.0,     
+               verbose=False)-> Union[TileSummary, pandas.DataFrame]:
     """
     Calculates tile coordinates and returns a TileSummary object. If save_tiles == True the tiles will also be extracted
     and saved from the WSI or ROI (ROI is assumed to be a "normal" image format like .png).
     
     Arguments:
     wsi_path: Path to a WSI or ROI(=already extracted part of a wsi in e.g. .png format)
-    tiles_folder_path: The folder where the extracted tiles will be saved (only needed if save_tiles=True).
     tile_heigth: Number of pixels tile height.
     tile_width: Number of pixels tile width.
     minimal_acceptable_tile_height: factor between 0.0 and 1.0. percentage of orig_h ;affects tiles at the edges, which 
@@ -432,6 +449,7 @@ def WsiOrROIToTiles(wsi_path:pathlib.Path,
     level: Level of the WSI you want to extract the tiles from. 0 means highest resolution. For not wsi formats like .png leave it at 
             0.
     save_tiles: if True the tiles will be extracted and saved to {tilesFolderPath}
+    tiles_folder_path: The folder where the extracted tiles will be saved (only needed if save_tiles=True).
     return_as_tilesummary_object: return_as_tilesummary_object: Set this to true, if you 
                                     want the TileSummary object and not a pandas dataframe.
     rois: If rois are specified, only tissue inside these rois will be extracted
@@ -510,7 +528,6 @@ def WsiOrROIToTiles(wsi_path:pathlib.Path,
         else:
             return pd.DataFrame(rows_list).set_index('tile_name', inplace=False)
         
-        
 def WsiOrROIToTilesMultithreaded(wsi_paths:List[pathlib.Path], 
                              tiles_folder_path:pathlib.Path,
                              tile_height:int, 
@@ -526,12 +543,30 @@ def WsiOrROIToTilesMultithreaded(wsi_paths:List[pathlib.Path],
                              wsi_path_to_rois:Dict[pathlib.Path, List[shared.roi.RegionOfInterestPolygon]] = None,
                              minimal_tile_roi_intersection_ratio:float = 1.0,
                              verbose=False)-> Union[List[TileSummary], pandas.DataFrame]:
+    raise DeprecationWarning('The function WsiOrROIToTilesMultithreaded was renamed to WsisToTilesParallel')
+        
+        
+      
+def WsisToTilesParallel(wsi_paths:List[pathlib.Path], 
+                             tile_height:int, 
+                             tile_width:int,
+                             minimal_acceptable_tile_height:float = 0.7,
+                             minimal_acceptable_tile_width:float = 0.7,
+                             tile_naming_func:Callable = tile_naming_function_default,
+                             tile_score_thresh:float = 0.55,
+                             tile_scoring_function = scoring_function_1,  
+                             level = 0, 
+                             save_tiles:bool = False,
+                             tiles_folder_path:pathlib.Path=None,
+                             return_as_tilesummary_object = True, 
+                             wsi_path_to_rois:Dict[pathlib.Path, List[shared.roi.RegionOfInterestPolygon]] = None,
+                             minimal_tile_roi_intersection_ratio:float = 1.0,
+                             verbose=False)-> Union[List[TileSummary], pandas.DataFrame]:
     """
-    The method WsiOrROIToTiles for a list of WSIs/ROIs in parallel on multiple threads.
+    The method WsiToTiles for a list of WSIs/ROIs in parallel.
     
     Arguments:
-    wsi_paths: A list of paths to the WSIs or ROIs
-    tiles_folder_path: The folder where the extracted tiles will be saved (only needed if save_tiles=True).
+    wsi_paths: A list of paths to the WSIs or ROIs(=preextracted png files from WSIs)
     tile_heigth: Number of pixels tile height.
     tile_width: Number of pixels tile width.
     minimal_acceptable_tile_height: factor between 0.0 and 1.0. percentage of orig_h ;affects tiles at the edges, which 
@@ -546,7 +581,8 @@ def WsiOrROIToTilesMultithreaded(wsi_paths:List[pathlib.Path],
                         the file format .png, whick is generated by this library).
     level: Level of the WSI you want to extract the tile from. 0 means highest resolution. For not wsi formats like .png leave it at 
             0.
-    save_tiles: if True the tiles will be extracted and saved to {tilesFolderPath}
+    save_tiles: if True the tiles will be extracted and saved to {tiles_folder_path}
+    tiles_folder_path: The folder where the extracted tiles will be saved (only needed if save_tiles=True).
     return_as_tilesummary_object: Set this to true, if you want the TileSummary object and not a pandas dataframe.
     wsi_path_to_rois: a dict with key: wsi_path and value List[shared.roi.RegionOfInterestPolygon]].
     minimal_tile_roi_intersection_ratio: [0.0, 1.0] 
@@ -570,9 +606,8 @@ def WsiOrROIToTilesMultithreaded(wsi_paths:List[pathlib.Path],
     
     with multiprocessing.Pool() as pool:
         for p in wsi_paths:
-            pool.apply_async(WsiOrROIToTiles, 
-                             kwds={"wsi_path":p, 
-                                   "tiles_folder_path":tiles_folder_path,
+            pool.apply_async(WsiToTiles, 
+                             kwds={"wsi_path":p,                                    
                                    "tile_height":tile_height, 
                                    "tile_width":tile_width,
                                    "minimal_acceptable_tile_height":minimal_acceptable_tile_height,
@@ -581,7 +616,8 @@ def WsiOrROIToTilesMultithreaded(wsi_paths:List[pathlib.Path],
                                    "tile_score_thresh":tile_score_thresh, 
                                    "tile_scoring_function":tile_scoring_function, 
                                    "level":level, 
-                                   "save_tiles":save_tiles, 
+                                   "save_tiles":save_tiles,
+                                   "tiles_folder_path":tiles_folder_path,
                                    "return_as_tilesummary_object":return_as_tilesummary_object, 
                                    "rois":util.safe_dict_access(wsi_path_to_rois, p),
                                    "minimal_tile_roi_intersection_ratio":minimal_tile_roi_intersection_ratio,
