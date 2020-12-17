@@ -32,7 +32,7 @@ from hashlib import sha256
 #https://stackoverflow.com/questions/8804830/python-multiprocessing-picklingerror-cant-pickle-type-function
 def remove_object(patient_manager:shared.patient_manager.PatientManager, 
                     obj:Union[shared.tile.Tile, shared.wsi.WholeSlideImage, shared.case.Case])->bool:
-    if(isinstance(obj, tile.Tile)):
+    if(isinstance(obj, tile.Tile) or isinstance(obj, shared.tile.Tile)):
         return obj, patient_manager.remove_tile(tile = obj)
     if(isinstance(obj, shared.wsi.WholeSlideImage)):
         return obj, patient_manager.remove_slide(wsi = obj)
@@ -700,7 +700,23 @@ class PatientManager:
             count += 1
 
             
-
+    def reduce_tiles(self, remaining_percentage:float, random_seed:int):
+        """
+        This method iterates over all WSIs and removes (1 - remaining_percentage) percent of each WSI's tiles.
+        Arguments:
+            remaining_percentage: value in range (0.0;1.0); percentage of tiles that will remain of each WSI
+            random_seed: int number, use the same number to get same results in every run
+        """
+        if(remaining_percentage <= 0.0 or remaining_percentage >= 1.0):
+            raise ValueError("The parameter remaining percentage has to be in the range (0.0;1.0)")
+            
+        random.seed = random_seed
+        for wsi in tqdm(self.get_wsis(dataset_type=shared.enums.DatasetType.all)):
+            # sorted to get a consistent sample for the same random seed
+            self.__remove_objects(random.sample(sorted(wsi.get_tiles(), key=lambda t: t.get_name()), 
+                                                int(len(wsi.get_tiles())*(1-remaining_percentage))))
+            
+            
 import patient    
 import case
 import wsi
