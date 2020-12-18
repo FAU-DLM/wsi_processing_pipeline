@@ -21,7 +21,7 @@ class WholeSlideImage:
         self.case = case
         self.slide_id = slide_id
         self.path = path
-        self.regions_of_interest = []
+        self.__regions_of_interest = []
         
     def __str__(self):
         return self.slide_id

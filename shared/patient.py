@@ -20,7 +20,7 @@ class Patient:
     dataset_type:DatasetType = None
         
     def __init__(self, patient_id:str, patient_manager:PatientManager):
-        self.cases = []
+        self.__cases = []
         self.patient_id = patient_id
         self.patient_manager = patient_manager
         

@@ -20,7 +20,7 @@ class Case:
     predictions_thresh:Dict[str, bool] = None # key: class name; value: bool
             
     def __init__(self, case_id:str, patient:Patient):
-        self.whole_slide_images = []
+        self.__whole_slide_images = []
         self.case_id = case_id
         self.patient = patient
         

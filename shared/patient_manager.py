@@ -47,7 +47,7 @@ class PatientManager:
     __patients:List[Patient] = None
     
     def __init__(self):
-        self.patients = []
+        self.__patients = []
 
     def __get_patients(self)->List[Patient]:
         return [p for p in self.__patients if(not p.is_removed())]
@@ -108,14 +108,14 @@ class PatientManager:
                     break;
             if(current_case == None):
                 current_case = Case(case_id=case_id, patient=current_patient)
-                current_patient.cases.add_case(current_case)
+                current_patient.add_case(current_case)
             
             ###
             # whole-slide
             ###
             slide_id = slide_id_getter(tilesummary.wsi_path)
             current_slide = WholeSlideImage(slide_id=slide_id, case=current_case, path=tilesummary.wsi_path)
-            current_case.whole_slide_images.add_whole_slide_image(current_slide)
+            current_case.add_whole_slide_image(current_slide)
             
             ###
             # regions of interest
@@ -124,7 +124,7 @@ class PatientManager:
             
             assert (rois != None and len(rois) > 0)
             for roi in rois:
-                current_slide.regions_of_interest.add_regions_of_interest(roi)
+                current_slide.add_regions_of_interest(roi)
                 roi.whole_slide_image = current_slide
                 roi.labels = labels_getter(tilesummary.wsi_path, roi)
                 for tile in tilesummary.top_tiles():               
@@ -565,7 +565,7 @@ class PatientManager:
         Returns:
             Tuple of the object and a bool value
         """
-        for patient in self.get_patients():
+        for patient in self.__get_patients():
             for case in patient.get_cases():
                 for wsi in case.get_whole_slide_images():
                     for roi in wsi.get_regions_of_interest():
