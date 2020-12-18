@@ -8,8 +8,10 @@ from typing import Dict
 
 
 class WholeSlideImage:
+    __removed = False #Flag that can be set True, to mark it as "deleted" for the patient_manager. use getter and setter methods
+    
     case:Case = None
-    regions_of_interest:List[RegionOfInterest] = None
+    __regions_of_interest:List[RegionOfInterest] = None
     slide_id:str = None
     path:pathlib.Path = None
     predictions_raw:Dict[str, float] = None # key: class name; value: tiles with that class / all tiles
@@ -26,11 +28,25 @@ class WholeSlideImage:
 
     def __repr__(self):
         return "\n" + self.__str__()
-        
+    
+    def is_removed(self):
+        return self.__removed
+    
+    def set_removed_flag(self, value:bool):
+        self.__removed = value
+        for roi in self.regions_of_interest:
+            roi.set_removed_flag(value)
+    
+    def get_regions_of_interest(self):
+        return [r for r in self.__regions_of_interest if(not r.is_removed())]
+    
+    def add_regions_of_interest(self, roi:RegionOfInterest):
+        self.__regions_of_interest.append(roi)
+    
     def get_tiles(self)-> List[shared.tile.Tile]:
         tls = []
-        for roi in self.regions_of_interest:
-            for tile in roi.tiles:
+        for roi in self.get_regions_of_interest():
+            for tile in roi.get_tiles():
                 tls.append(tile)
         return tls
     

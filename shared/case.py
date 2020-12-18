@@ -10,10 +10,12 @@ import numpy as np
 from typing import List, Callable, Tuple
 
 
-class Case:  
+class Case:
+    __removed = False #Flag that can be set True, to mark it as "deleted" for the patient_manager
+    
     case_id:str = None
     patient:Patient = None
-    whole_slide_images:List[WholeSlideImage] = None
+    __whole_slide_images:List[WholeSlideImage] = None
     predictions_raw:Dict[str, float] = None # key: class name; value: tiles with that class / all tiles
     predictions_thresh:Dict[str, bool] = None # key: class name; value: bool
             
@@ -27,12 +29,26 @@ class Case:
 
     def __repr__(self):
         return "\n" + self.__str__()
-        
+    
+    def is_removed(self):
+        return self.__removed
+    
+    def set_removed_flag(self, value:bool):
+        self.__removed = value
+        for wsi in self.whole_slide_images:
+            wsi.set_removed_flag(value):
+    
+    def get_whole_slide_images(self)->List[WholeSlideImage]:
+        return [wsi for wsi in self.__whole_slide_images if(not wsi.is_removed())]
+    
+    def add_whole_slide_image(self, wsi:WholeSlideImage):
+        self.__whole_slide_images.append(wsi)
+    
     def get_tiles(self)-> List[shared.tile.Tile]:
         tls = []
-        for wsi in self.whole_slide_images:
-            for roi in wsi.regions_of_interest:
-                for tile in roi.tiles:
+        for wsi in self.get_whole_slide_images():
+            for roi in wsi.get_regions_of_interest():
+                for tile in roi.get_tiles():
                     tls.append(tile)
         return tls
     

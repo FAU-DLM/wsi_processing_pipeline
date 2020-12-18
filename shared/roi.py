@@ -12,14 +12,34 @@ import json
 
 from abc import ABC, abstractmethod
 class RegionOfInterest(ABC):
+    __removed = False #Flag that can be set True, to mark it as "deleted" for the patient_manager. use getter and setter methods
+                      # this flag is not used in the TileSummary class
+    
     roi_id:str = None
     whole_slide_image:WholeSlideImage = None
     labels:List[int] = None
-    tiles:List[Tile] = None
+    __tiles:List[Tile] = None
     def __init__(self, roi_id:str, whole_slide_image:WholeSlideImage):
         self.roi_id = roi_id
         self.whole_slide_image = whole_slide_image
-        self.tiles = []
+        self.__tiles = []
+        
+    def is_removed(self):
+        return self.__removed
+    
+    def set_removed_flag(self, value:bool):
+        self.__removed = value
+        for tile in self.__tiles:
+            tile.set_removed_flag(value)
+            
+    def get_tiles(self):
+        return [t for t in self.__tiles if(not t.is_removed())]
+    
+    def add_tile(self, tile:Tile):
+        self.__tiles.append(tile)
+        
+    def reset_tiles(self):
+        self.__tiles = []
         
         
 class RegionOfInterestDummy(RegionOfInterest):
@@ -27,10 +47,10 @@ class RegionOfInterestDummy(RegionOfInterest):
     Used when there is no necessity for a roi. E.g. when there are already preextracted tiles
     Just here to persist the hierarchy of the classes
     """
-    tiles:List[pathlib.Path]
+    __tiles:List[pathlib.Path]
     def __init__(self, roi_id:str, whole_slide_image:WholeSlideImage):
         super().__init__(roi_id = roi_id, whole_slide_image = whole_slide_image)
-        self.tiles = []
+        self.__tiles = []
         
 class RegionOfInterestPreextracted(RegionOfInterest):    
     path:pathlib.Path = None

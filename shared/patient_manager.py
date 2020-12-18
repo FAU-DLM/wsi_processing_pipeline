@@ -31,24 +31,31 @@ from hashlib import sha256
 #needs to be on the top level of the module to be pickled in multiprocessing pool
 #https://stackoverflow.com/questions/8804830/python-multiprocessing-picklingerror-cant-pickle-type-function
 def remove_object(patient_manager:shared.patient_manager.PatientManager, 
-                    obj:Union[shared.tile.Tile, shared.wsi.WholeSlideImage, shared.case.Case])->bool:
+                    obj:Union[shared.tile.Tile, shared.wsi.WholeSlideImage, shared.case.Case])->Tuple[object, bool]:
     if(isinstance(obj, tile.Tile) or isinstance(obj, shared.tile.Tile)):
-        return obj, patient_manager.remove_tile(tile = obj)
+        return patient_manager.remove_tile(tile = obj)
     if(isinstance(obj, shared.wsi.WholeSlideImage)):
-        return obj, patient_manager.remove_slide(wsi = obj)
+        return patient_manager.remove_slide(wsi = obj)
     if(isinstance(obj, shared.case.Case)):
-        return obj, patient_manager.remove_case(case = obj)
+        return patient_manager.remove_case(case = obj)
     
     raise ValueError(f'obj is of the wrong type. Its type is {type(obj)}')            
             
 
 class PatientManager:
         
-    patients:List[Patient] = None
+    __patients:List[Patient] = None
     
     def __init__(self):
         self.patients = []
+
+    def __get_patients(self)->List[Patient]:
+        return [p for p in self.__patients if(not p.is_removed())]
     
+    def add_patient(self, patient:Patient):
+        self.__patients.append(patient)
+############################################# init methods ###################################################################        
+
     def create_from_tilesummaries(self, 
                                   tilesummaries:List[tile_extraction.tiles.TileSummary], 
                                   patient_id_getter:Callable, 
@@ -73,7 +80,7 @@ class PatientManager:
         self.patients = []
         for ts in tilesummaries:
             for roi in ts.rois:
-                roi.tiles = []
+                roi.reset_tiles()
         
         #key: patient_id; value: Patient object
         patient_id_to_patient = {}
@@ -86,7 +93,7 @@ class PatientManager:
             if(patient_id not in patient_id_to_patient.keys()):
                 current_patient = Patient(patient_id=patient_id, patient_manager=self)
                 patient_id_to_patient[patient_id] = current_patient
-                self.patients.append(current_patient)
+                self.add_patient(current_patient)
             else:
                 current_patient = patient_id_to_patient[patient_id]
             
@@ -95,20 +102,20 @@ class PatientManager:
             ###
             case_id = case_id_getter(tilesummary.wsi_path)
             current_case = None
-            for case in current_patient.cases:
+            for case in current_patient.get_cases():
                 if(case.case_id == case_id):
                     current_case = case
                     break;
             if(current_case == None):
                 current_case = Case(case_id=case_id, patient=current_patient)
-                current_patient.cases.append(current_case)
+                current_patient.cases.add_case(current_case)
             
             ###
             # whole-slide
             ###
             slide_id = slide_id_getter(tilesummary.wsi_path)
             current_slide = WholeSlideImage(slide_id=slide_id, case=current_case, path=tilesummary.wsi_path)
-            current_case.whole_slide_images.append(current_slide)
+            current_case.whole_slide_images.add_whole_slide_image(current_slide)
             
             ###
             # regions of interest
@@ -117,12 +124,12 @@ class PatientManager:
             
             assert (rois != None and len(rois) > 0)
             for roi in rois:
-                current_slide.regions_of_interest.append(roi)
+                current_slide.regions_of_interest.add_regions_of_interest(roi)
                 roi.whole_slide_image = current_slide
                 roi.labels = labels_getter(tilesummary.wsi_path, roi)
                 for tile in tilesummary.top_tiles():               
                     if(tile.roi.roi_id == roi.roi_id):
-                        roi.tiles.append(tile)
+                        roi.add_tile(tile)
                         tile.labels = roi.labels
             
     
@@ -197,7 +204,7 @@ class PatientManager:
             if(patient_id not in patient_id_to_patient.keys()):
                 current_patient = Patient(patient_id=patient_id, patient_manager=self)
                 patient_id_to_patient[patient_id] = current_patient
-                self.patients.append(current_patient)
+                self.add_patient(current_patient)
             else:
                 current_patient = patient_id_to_patient[patient_id]
             
@@ -206,26 +213,26 @@ class PatientManager:
             ###
             case_id = case_id_getter(tile_path)
             current_case = None
-            for case in current_patient.cases:
+            for case in current_patient.get_cases():
                 if(case.case_id == case_id):
                     current_case = case
                     break;
             if(current_case == None):
                 current_case = Case(case_id=case_id, patient=current_patient)
-                current_patient.cases.append(current_case)
+                current_patient.add_case(current_case)
             
             ###
             # whole-slide
             ###
             slide_id = slide_id_getter(tile_path)
             current_slide = None
-            for slide in current_case.whole_slide_images:
+            for slide in current_case.get_whole_slide_images():
                 if(slide.slide_id == slide_id):
                     current_slide = slide
                     break;
             if(current_slide == None):
                 current_slide = WholeSlideImage(slide_id=slide_id, case=current_case)
-                current_case.whole_slide_images.append(current_slide)
+                current_case.add_whole_slide_image(current_slide)
             
             ###
             # region of interest; just one dummy roi per wsi
@@ -233,14 +240,17 @@ class PatientManager:
             current_roi = None
             if(len(current_slide.regions_of_interest) == 0):
                 current_roi = roi.RegionOfInterestDummy(slide_id, current_slide)
-                current_slide.regions_of_interest.append(current_roi)
+                current_slide.add_region_of_interest(current_roi)
             else:
                 current_roi = current_slide.regions_of_interest[0]
             tile = Tile(roi=current_roi, tile_path=tile_path, labels=labels_getter(tile_path))
-            current_roi.tiles.append(tile)
+            current_roi.add_tile(tile)
             
-    
-    
+############################################# END init methods ###################################################################     
+
+
+############################################# split methods ###################################################################### 
+
     def split_by_function(self, splitter:Callable, random_state:int):
         """
         Splits the patients into a train, validation and test set and sets the dataset_type attribute of every 
@@ -263,10 +273,10 @@ class PatientManager:
         # If the same ids are given in a different order to the method,
         # without sorting it would result in a different split, 
         # even if random_state is the the same (and numpy.random.seed()).
-        patient_ids = sorted(list(set([patient.patient_id for patient in self.patients])))
+        patient_ids = sorted(list(set([patient.patient_id for patient in self.__get_patients()])))
                 
         ids_train, ids_val, ids_test = splitter(patient_ids)              
-        for patient in self.patients:
+        for patient in self.__get_patients():
             if(patient.patient_id in ids_val):
                 patient.dataset_type = DatasetType.validation
             elif(patient.patient_id in ids_train):
@@ -410,10 +420,13 @@ class PatientManager:
                                      shuffle=shuffle)
         self.split_by_function(splitter, random_state)
 
+        
+############################################# END split methods ###################################################################        
+        
+############################################# getter methods ######################################################################
     
     def get_patients(self, dataset_type:shared.enums.DatasetType)->List[shared.patient.Patient]:
-        return [p for p in self.patients if((dataset_type == shared.enums.DatasetType.all) 
-                                            or (p.dataset_type == dataset_type))]
+        return [p for p in self.__get_patients() if(dataset_type == shared.enums.DatasetType.all or p.dataset_type == dataset_type)]
     
     
     def __get_objects_according_to_evaluation_level(self, 
@@ -438,10 +451,10 @@ class PatientManager:
     def __get_tiles(self, dataset_type:shared.enums.DatasetType):
         tls = []
         for patient in self.get_patients(dataset_type=dataset_type):
-            for case in patient.cases:
-                for wsi in case.whole_slide_images:
-                    for roi in wsi.regions_of_interest:
-                        for tile in roi.tiles:
+            for case in patient.get_cases():
+                for wsi in case.get_whole_slide_images():
+                    for roi in wsi.get_regions_of_interest():
+                        for tile in roi.get_tiles():
                             tls.append(tile)
                             
         return tls
@@ -458,8 +471,8 @@ class PatientManager:
     def get_wsis(self, dataset_type:shared.enums.DatasetType)->List[shared.wsi.WholeSlideImage]:
         wsis = []
         for patient in self.get_patients(dataset_type=dataset_type):
-            for case in patient.cases:
-                for wsi in case.whole_slide_images:
+            for case in patient.get_cases():
+                for wsi in case.get_whole_slide_images():
                     wsis.append(wsi)
                             
         return wsis
@@ -467,13 +480,11 @@ class PatientManager:
     def get_cases(self, dataset_type:shared.enums.DatasetType)->List[shared.case.Case]:
         cases = []
         for patient in self.get_patients(dataset_type=dataset_type):
-            for case in patient.cases:
+            for case in patient.get_cases():
                 cases.append(case)
                             
         return cases
-   
-    
-    
+      
     def get_classes(self)->List[str]:
         classes = set()
         for t in self.get_all_tiles():
@@ -510,45 +521,56 @@ class PatientManager:
         
         return len(objs), dict_class_to_n, dict_class_to_percentage
 
+############################################# END getter methods ###################################################################
     
-    def remove_case(self, case:shared.case.Case)->bool:
+    
+############################################# remove methods ###################################################################    
+    
+    def remove_case(self, case:shared.case.Case)->Tuple[object, bool]:
         """
         Looks for the given Case object in patient manager's cases.
-        If it is found, it removes it and returns True, otherwise False.
+        If it is found, it sets its "removed" flag to True and returns True, otherwise False.
+        
+        Returns:
+            Tuple of the object and a bool value
+            
         """
-        for patient in self.patients:
-            if case in patient.cases:
-                patient.cases.remove(case)
+        for patient in self.__get_patients():
+            if case in patient.get_cases():
+                case.set_removed_flag(True)
                 return case, True
                 
         return case, False
 
-    def remove_slide(self, wsi:shared.wsi.WholeSlideImage)->bool:
+    def remove_slide(self, wsi:shared.wsi.WholeSlideImage)->Tuple[object, bool]:
         """
         Looks for the given WholeSlideImage object in patient manager's WSIs.
-        If it is found, it removes it and returns True, otherwise False.
+        If it is found, it sets its "removed" flag to True and returns True, otherwise False.
+        
+        Returns:
+            Tuple of the object and a bool value
         """
-        for patient in self.patients:
-            for case in patient.cases:
-                if wsi in case.whole_slide_images:
-                    case.whole_slide_images.remove(wsi)
+        for patient in self.__get_patients():
+            for case in patient.get_cases():
+                if wsi in case.get_whole_slide_images():
+                    wsi.set_removed_flag(True)
                     return wsi, True
         return wsi, False
 
-    def remove_tile(self, tile:shared.tile.Tile)->bool:
+    def remove_tile(self, tile:shared.tile.Tile)->Tuple[object, bool]:
         """
         Looks for the given Tile object in patient manager's tiles.
-        If it is found, it removes it and returns True, otherwise False.
+        If it is found, it sets its "removed" flag to True and returns True, otherwise False.
         
         Returns:
-            Given Tile object and bool value. True means found and removed, False otherwise
+            Tuple of the object and a bool value
         """
-        for patient in self.patients:
-            for case in patient.cases:
-                for wsi in case.whole_slide_images:
-                    for roi in wsi.regions_of_interest:
-                        if tile in roi.tiles:
-                            roi.tiles.remove(tile)
+        for patient in self.get_patients():
+            for case in patient.get_cases():
+                for wsi in case.get_whole_slide_images():
+                    for roi in wsi.get_regions_of_interest():
+                        if tile in roi.get_tiles():
+                            tile.set_removed_flag(True)
                             return tile, True
         return tile, False
     
@@ -627,8 +649,13 @@ class PatientManager:
         """
         return self.__remove_objects(objs=tiles, verbose=verbose)
     
+
+############################################# END remove methods ###################################################################
     
+
+############################################# downsampling and reduce methods ######################################################    
     
+
     def downsample(self, 
                    level:shared.enums.EvaluationLevel = shared.enums.EvaluationLevel.tile, 
                    dataset_type:shared.enums.DatasetType = shared.enums.DatasetType.train, 

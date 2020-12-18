@@ -22,8 +22,11 @@ import os
 
 class Tile:
     """
-    Class for information about a tile.
+    Class with information about a tile.
     """
+    __removed = False #Flag that can be set True, to mark it as "deleted" for the patient_manager. use getter and setter method
+                      # this flag is not used in the TileSummary class
+    
     tile_summary = None
     tiles_folder_path = None
     np_scaled_filtered_tile = None
@@ -140,6 +143,12 @@ class Tile:
     def __repr__(self):
         return "\n" + self.__str__()
 
+    def is_removed(self):
+        return self.__removed
+    
+    def set_removed_flag(self, value:bool):
+        self.__removed = value
+            
     def mask_percentage(self):
         return 100 - self.tissue_percentage
 
