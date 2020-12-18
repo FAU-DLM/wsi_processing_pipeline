@@ -36,7 +36,7 @@ class Case:
     def set_removed_flag(self, value:bool):
         self.__removed = value
         for wsi in self.whole_slide_images:
-            wsi.set_removed_flag(value):
+            wsi.set_removed_flag(value)
     
     def get_whole_slide_images(self)->List[WholeSlideImage]:
         return [wsi for wsi in self.__whole_slide_images if(not wsi.is_removed())]
