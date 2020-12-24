@@ -26,22 +26,42 @@ from hashlib import sha256
 ##
 
 
-###### module methods ######
 
-#needs to be on the top level of the module to be pickled in multiprocessing pool
+#need to be on the top level of the module and not an instance method to be pickled in multiprocessing pool
 #https://stackoverflow.com/questions/8804830/python-multiprocessing-picklingerror-cant-pickle-type-function
-def remove_object(patient_manager:shared.patient_manager.PatientManager, 
-                    obj:Union[shared.tile.Tile, shared.wsi.WholeSlideImage, shared.case.Case])->Tuple[object, bool]:
-    if(isinstance(obj, tile.Tile) or isinstance(obj, shared.tile.Tile)):
-        return patient_manager.remove_tile(tile = obj)
-    if(isinstance(obj, shared.wsi.WholeSlideImage)):
-        return patient_manager.remove_slide(wsi = obj)
-    if(isinstance(obj, shared.case.Case)):
-        return patient_manager.remove_case(case = obj)
+def remove_object(obj:Union[shared.tile.Tile, shared.wsi.WholeSlideImage, shared.case.Case]):
+    if(type(obj) != shared.tile.Tile):
+        print(type(obj))
+    obj.set_removed_flag(value=True)
     
-    raise ValueError(f'obj is of the wrong type. Its type is {type(obj)}')            
+def remove_objects(objs:List[Union[shared.tile.Tile, shared.wsi.WholeSlideImage, shared.case.Case]], 
+                   verbose=False):    
+        if(verbose):
+            pbar = tqdm(total=len(objs))
+        
+        def update():
+            if(verbose):
+                pbar.update()
             
+        def error(e):
+            print(e)
+        
+        #with multiprocessing.Pool() as pool:
+        #    for o in objs:
+        #        pool.apply_async(remove_object, 
+        #                         kwds={"obj":o}, 
+        #                               callback=update, 
+        #                               error_callback=error)                    
+        #    pool.close()
+        #    pool.join()  
+                
+        for obj in objs:
+            remove_object(obj=obj)
+            update()
 
+
+            
+            
 class PatientManager:
         
     __patients:List[Patient] = None
@@ -77,11 +97,8 @@ class PatientManager:
         """
         
         # empty the lists, in case this function is called multiple times
-        self.patients = []
-        for ts in tilesummaries:
-            for roi in ts.rois:
-                roi.reset_tiles()
-        
+        self.__patients = []
+       
         #key: patient_id; value: Patient object
         patient_id_to_patient = {}
         for tilesummary in tqdm(tilesummaries):
@@ -124,13 +141,20 @@ class PatientManager:
             
             assert (rois != None and len(rois) > 0)
             for roi in rois:
-                current_slide.add_regions_of_interest(roi)
+                roi.reset_tiles() #reset tiles in case this function is called multiple times
+                current_slide.add_region_of_interest(roi)
                 roi.whole_slide_image = current_slide
                 roi.labels = labels_getter(tilesummary.wsi_path, roi)
                 for tile in tilesummary.top_tiles():               
                     if(tile.roi.roi_id == roi.roi_id):
+                        tile.set_removed_flag(value=False) # this flag might still be True from a previous call
                         roi.add_tile(tile)
                         tile.labels = roi.labels
+                        
+        rs = self.get_rois(dataset_type=shared.enums.DatasetType.all)
+        roi_ids = [r.roi_id for r in rs]
+        if(len(roi_ids) != len(set(roi_ids))):
+            raise ValueError('The rois do not have unique ids.')
             
     
     def create_from_whole_slide_images(self, 
@@ -467,6 +491,16 @@ class PatientManager:
     
     def get_tiles(self, dataset_type:shared.enums.DatasetType)->List[shared.tile.Tile]:
         return self.__get_tiles(dataset_type = dataset_type)
+    
+    def get_rois(self, dataset_type:shared.enums.DatasetType)->List[shared.wsi.WholeSlideImage]:
+        rois = []
+        for patient in self.get_patients(dataset_type=dataset_type):
+            for case in patient.get_cases():
+                for wsi in case.get_whole_slide_images():
+                    for r in wsi.get_regions_of_interest():
+                        rois.append(r)
+                            
+        return rois
         
     def get_wsis(self, dataset_type:shared.enums.DatasetType)->List[shared.wsi.WholeSlideImage]:
         wsis = []
@@ -525,137 +559,33 @@ class PatientManager:
     
     
 ############################################# remove methods ###################################################################    
-    
-    def remove_case(self, case:shared.case.Case)->Tuple[object, bool]:
-        """
-        Looks for the given Case object in patient manager's cases.
-        If it is found, it sets its "removed" flag to True and returns True, otherwise False.
-        
-        Returns:
-            Tuple of the object and a bool value
-            
-        """
-        for patient in self.__get_patients():
-            if case in patient.get_cases():
-                case.set_removed_flag(True)
-                return case, True
-                
-        return case, False
-
-    def remove_slide(self, wsi:shared.wsi.WholeSlideImage)->Tuple[object, bool]:
-        """
-        Looks for the given WholeSlideImage object in patient manager's WSIs.
-        If it is found, it sets its "removed" flag to True and returns True, otherwise False.
-        
-        Returns:
-            Tuple of the object and a bool value
-        """
-        for patient in self.__get_patients():
-            for case in patient.get_cases():
-                if wsi in case.get_whole_slide_images():
-                    wsi.set_removed_flag(True)
-                    return wsi, True
-        return wsi, False
-
-    def remove_tile(self, tile:shared.tile.Tile)->Tuple[object, bool]:
-        """
-        Looks for the given Tile object in patient manager's tiles.
-        If it is found, it sets its "removed" flag to True and returns True, otherwise False.
-        
-        Returns:
-            Tuple of the object and a bool value
-        """
-        for patient in self.__get_patients():
-            for case in patient.get_cases():
-                for wsi in case.get_whole_slide_images():
-                    for roi in wsi.get_regions_of_interest():
-                        if tile in roi.get_tiles():
-                            tile.set_removed_flag(True)
-                            return tile, True
-        return tile, False
-    
-    
-    def __remove_objects(self, 
-                         objs:List[Union[shared.tile.Tile, shared.wsi.WholeSlideImage, shared.case.Case]], 
-                         verbose=False)\
-                        ->Dict[Union[shared.tile.Tile, shared.wsi.WholeSlideImage, shared.case.Case], bool]:
-        #remove duplicates
-        objs = list(set(objs))
-        
-        #if(verbose):
-        #    pbar = tqdm(total=len(objs))
-        
-        success_dict = {}
-        def update(obj, success):
-            success_dict[obj] = success
-            #if(verbose):
-             #   pbar.update()
-            
-        def error(e):
-            print(e)
-        
-        #with multiprocessing.Pool() as pool:
-        #    for o in objs:
-        #        pool.apply_async(remove_object, 
-        #                         kwds={"patient_manager":self, 
-        #                               "obj":o}, 
-        #                               callback=update, 
-        #                               error_callback=error)                    
-        #    pool.close()
-        #    pool.join()
-        
-        
-        for o in objs:
-            obj, success = remove_object(self, o)
-            update(obj, success)
-        
-        
-        return success_dict    
-    
-    
+       
     def remove_cases(self, cases:List[shared.case.Case], verbose=False)-> Dict[shared.case.Case, bool]:
         """
-        Looks for the given case objects in patient manager's cases.
-        If it is found, it removes it and returns True, otherwise False.
-        Arguments:
-        
-        Return:
-           Dictionary with Case objects as keys and bool values. True means found and removed, False otherwise
+        Sets the "removed" flags of the given cases to True.
         """
-        return self.__remove_objects(objs=cases, verbose=verbose)
+        remove_objects(objs=cases, verbose=verbose)
     
 
     def remove_slides(self, wsis:List[shared.wsi.WholeSlideImage], verbose=False)\
                         -> Dict[shared.wsi.WholeSlideImage, bool]:
         """
-        Looks for the given slide objects in patient manager's slides.
-        If it is found, it removes it and returns True, otherwise False.
-        Arguments:
-        
-        Return:
-           Dictionary with WholeSlideImage objects as keys and bool values. True means found and removed, 
-           False otherwise
+        Sets the "removed" flags of the given wsis to True.
         """
-        return self.__remove_objects(objs=wsis, verbose=verbose)
+        remove_objects(objs=wsis, verbose=verbose)
     
     def remove_tiles(self, tiles:List[shared.tile.Tile], verbose=False)-> Dict[shared.tile.Tile, bool]:
         """
-        Looks for the given Tile objects in patient manager's tiles.
-        If it is found, it removes it and returns True, otherwise False.
-        Arguments:
-        
-        Return:
-           Dictionary with Tile objects as keys and bool values. True means found and removed, False otherwise
+        Sets the "removed" flags of the given tiles to True.
         """
-        return self.__remove_objects(objs=tiles, verbose=verbose)
+        remove_objects(objs=tiles, verbose=verbose)
     
 
 ############################################# END remove methods ###################################################################
     
 
-############################################# downsampling and reduce methods ######################################################    
+############################################# downsampling and reduce methods ######################################################   
     
-
     def downsample(self, 
                    level:shared.enums.EvaluationLevel = shared.enums.EvaluationLevel.tile, 
                    dataset_type:shared.enums.DatasetType = shared.enums.DatasetType.train, 
@@ -722,28 +652,39 @@ class PatientManager:
             if(verbose):
                 print(f'n to remove: {n_to_remove}')
                             
-            self.__remove_objects(objs=objs_suitable_for_removal[:n_to_remove], verbose=verbose)
+            remove_objects(objs=objs_suitable_for_removal[:n_to_remove], verbose=verbose)
             
             count += 1
 
             
-    def reduce_tiles(self, remaining_percentage:float, random_seed:int):
+    def reduce_tiles(self, 
+                     dataset_type:shared.enums.DatasetType, 
+                     remaining_percentage:float, 
+                     random_seed:int, 
+                     verbose=False)->Dict[object, bool]:
         """
-        This method iterates over all WSIs and removes (1 - remaining_percentage) percent of each WSI's tiles.
+        This method reduces the total number of tiles of the given dataset_type to (1 - remaining_percentage) percent.
         Arguments:
+            dataset_type:
             remaining_percentage: value in range (0.0;1.0); percentage of tiles that will remain of each WSI
             random_seed: int number, use the same number to get same results in every run
         """
         if(remaining_percentage <= 0.0 or remaining_percentage >= 1.0):
             raise ValueError("The parameter remaining percentage has to be in the range (0.0;1.0)")
             
-        random.seed = random_seed
-        for wsi in tqdm(self.get_wsis(dataset_type=shared.enums.DatasetType.all)):
-            # sorted to get a consistent sample for the same random seed
-            self.__remove_objects(random.sample(sorted(wsi.get_tiles(), key=lambda t: t.get_name()), 
-                                                int(len(wsi.get_tiles())*(1-remaining_percentage))))
+        random.seed = random_seed  
+                
+        # sorted to get a consistent sample for the same random seed
+        tiles = sorted(self.__get_tiles(dataset_type=dataset_type), key=lambda t: t.get_name())
+        print(f'total number of tiles: {len(tiles)}')
+        k_to_remove = int(len(tiles)*(1-remaining_percentage))
+        print(f'number of tiles that will be removed: {k_to_remove}')
+        tiles_to_remove = random.sample(population=tiles, k=k_to_remove)
+        remove_objects(objs=tiles_to_remove, verbose=True)
             
             
+############################################# END downsampling and reduce methods ####################################################          
+                       
 import patient    
 import case
 import wsi

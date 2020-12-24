@@ -19,9 +19,8 @@ class RegionOfInterest(ABC):
     whole_slide_image:WholeSlideImage = None
     labels:List[int] = None
     __tiles:List[Tile] = None
-    def __init__(self, roi_id:str, whole_slide_image:WholeSlideImage):
+    def __init__(self, roi_id:str):
         self.roi_id = roi_id
-        self.whole_slide_image = whole_slide_image
         self.__tiles = []
         
     def is_removed(self):
@@ -29,7 +28,7 @@ class RegionOfInterest(ABC):
     
     def set_removed_flag(self, value:bool):
         self.__removed = value
-        for tile in self.__tiles:
+        for tile in self.get_tiles():
             tile.set_removed_flag(value)
             
     def get_tiles(self):
@@ -79,8 +78,10 @@ class RegionOfInterestPolygon(RegionOfInterest):
                     Leave it 0 if you use e.g. png files instead of a 
                     whole-slide image format like .ndpi
         """
+        super().__init__(roi_id=roi_id)
         self.polygon = Polygon(vertices)
         self.level = level
+        
         
     def __repr__(self):
         return f"Vertices coordinates: {self.get_vertices()}, level: {self.level}"
@@ -177,6 +178,9 @@ def get_list_of_RegionOfInterestPolygon_from_json(json_path:pathlib.Path,
         polygons_from_json_func: A function that reads the json file and returns a list of __PolygonHelper objects.
         validate_polygons_func: A function that validates if necessary fixes a list of __PolygonHelper objects.
         
-    """    
-    return [RegionOfInterestPolygon(roi_id=n, vertices=polygon_helper.vertices, level=polygon_helper.level)\
-            for n, polygon_helper in enumerate(validate_polygons_func(polygons_from_json_func(json_path)))]
+    """
+    rois = []
+    for n, polygon_helper in enumerate(validate_polygons_func(polygons_from_json_func(json_path))):
+        roi_id = f'{json_path.stem}_roi_number_{str(n)}'
+        rois.append(RegionOfInterestPolygon(roi_id=roi_id, vertices=polygon_helper.vertices, level=polygon_helper.level))
+    return rois

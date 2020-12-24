@@ -34,13 +34,13 @@ class WholeSlideImage:
     
     def set_removed_flag(self, value:bool):
         self.__removed = value
-        for roi in self.regions_of_interest:
+        for roi in self.get_regions_of_interest():
             roi.set_removed_flag(value)
     
     def get_regions_of_interest(self):
         return [r for r in self.__regions_of_interest if(not r.is_removed())]
     
-    def add_regions_of_interest(self, roi:RegionOfInterest):
+    def add_region_of_interest(self, roi:RegionOfInterest):
         self.__regions_of_interest.append(roi)
     
     def get_tiles(self)-> List[shared.tile.Tile]:

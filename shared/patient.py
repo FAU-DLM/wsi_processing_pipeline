@@ -30,7 +30,7 @@ class Patient:
     
     def set_removed_flag(self, value:bool):
         self.__removed = value
-        for case in self.cases:
+        for case in self.get_cases():
             case.set_removed_flag(value)
                 
     def get_cases(self)->List[Case]:
