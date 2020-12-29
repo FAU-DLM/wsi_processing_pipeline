@@ -115,8 +115,6 @@ class RegionOfInterestPolygon(RegionOfInterest):
         dc.change_level_in_place(new_level=new_level)
         return dc
     
-
-
 class __PolygonHelper:
     def __init__(self, level:int, vertices:Sequence[Tuple[float, float]]):
         self.level = level
@@ -135,15 +133,37 @@ def __get_polygons_from_json(json_path:pathlib.Path)->List[__PolygonHelper]:
     """
     polygons = []
     with open(json_path) as json_file:
-        for polygon_coords in json.load(json_file):
-            coords_raw = polygon_coords["geometry"]["coordinates"]
-            
-            #QuPath produces Polygons and Multipolygons 
-            #(see difference here: https://gis.stackexchange.com/questions/225368/understanding-difference-between-polygon-and-multipolygon-for-shapefiles-in-qgis/225373)
-            #This loop separates Multipolygons into individual Polygons
-            for vertices in coords_raw:
-                #all polygons on level 0 by default in this case
+        for annotatin in json.load(json_file):             
+            if(annotatin["geometry"]["type"] == 'MultiPolygon'):
+                multi_polygon_vertices = annotatin["geometry"]["coordinates"]
+                #print(f'Multi Polygon: {np.array(multi_polygon_vertices).squeeze().shape}')
+                ##QuPath produces Polygons and Multipolygons 
+                ##(see difference here: https://gis.stackexchange.com/questions/225368/understanding-difference-between-polygon-and-
+                ##multipolygon-for-shapefiles-in-qgis/225373)
+                ##This loop separates Multipolygons into individual Polygons
+                for sub_polygon_vertices in multi_polygon_vertices:
+                    sub_polygon_vertices_array = np.array(sub_polygon_vertices).squeeze()
+                    if(len(sub_polygon_vertices_array.shape) == 2 and sub_polygon_vertices_array.shape[1] == 2):
+                        #print(f'then: {sub_polygon_vertices_array.shape}')
+                        polygons.append(__PolygonHelper(level=0, vertices=sub_polygon_vertices_array))
+                    else:
+                        for elem in sub_polygon_vertices_array:
+                            elem_array = np.array(elem).squeeze()
+                            #print(f'else: {elem_array.shape}')
+                            polygons.append(__PolygonHelper(level=0, vertices=elem_array))
+                
+            elif(annotatin["geometry"]["type"] == 'Polygon'):
+                vertices = annotatin["geometry"]["coordinates"]
+                #print(f'Polygon: {np.array(vertices).squeeze().shape}')
                 polygons.append(__PolygonHelper(level=0, vertices=np.array(vertices).squeeze()))
+            else:
+                assert False
+            
+            #coords_raw = polygon_coords["geometry"]["coordinates"]
+
+            #for vertices in coords_raw:
+            #    #all polygons on level 0 by default in this case                
+            #    polygons.append(__PolygonHelper(level=0, vertices=np.array(vertices).squeeze()))
     return polygons
 
 def __validate_polygons(polygons:Sequence[__PolygonHelper])->Sequence[__PolygonHelper]:
