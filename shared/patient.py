@@ -23,8 +23,7 @@ class Patient:
         self.__cases = []
         self.patient_id = patient_id
         self.patient_manager = patient_manager
-        
-        
+                
     def is_removed(self):
         return self.__removed
     

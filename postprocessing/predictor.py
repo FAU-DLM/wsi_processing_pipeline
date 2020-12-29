@@ -318,16 +318,16 @@ class Predictor:
                                                     Same way of calculation on wsi level.
         """               
         for patient in self.patient_manager.get_patients(dataset_type=dataset_type):
-            for case in patient.cases:
+            for case in patient.get_cases():
                 self.calculate_predictions_for_one_case(case=case, 
                                                        thresholds_tile_level=thresholds_tile_level, 
                                                        thresholds_higher_level=thresholds_higher_level)
-                for wsi in case.whole_slide_images:
+                for wsi in case.get_whole_slide_images():
                     self.calculate_predictions_for_one_wsi(wsi=wsi, 
                                                        thresholds_tile_level=thresholds_tile_level, 
                                                        thresholds_higher_level=thresholds_higher_level)
-                    for roi in wsi.regions_of_interest:
-                        for tile in roi.tiles:
+                    for roi in wsi.get_regions_of_interest():
+                        for tile in roi.get_tiles():
                             self.calculate_predictions_for_one_tile(tile=tile, thresholds=thresholds_tile_level)
     
     def export_dataframe(self, 
