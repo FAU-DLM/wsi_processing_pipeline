@@ -856,13 +856,14 @@ def save_display_tile(tile, save, display):
   if display:
     tile_pil_img.show()
 
-def is_tile_in_one_of_the_rois(rois:List[shared.roi.RegionOfInterestPolygon], 
+def get_rois_the_given_tile_is_in(rois:List[shared.roi.RegionOfInterestPolygon], 
                                tile:shapely.geometry.Polygon, 
-                               minimal_tile_roi_intersection_ratio:float)->bool:
+                               minimal_tile_roi_intersection_ratio:float)->List[shared.roi.RegionOfInterestPolygon]:
+    containing_rois = []
     for roi in rois:
         if((roi.polygon.intersection(tile).area/tile.area) >= minimal_tile_roi_intersection_ratio):
-            return True
-    return False
+            containing_rois.append(roi)
+    return containing_rois
 
 def score_tiles(img_np:np.array, 
                 img_np_filtered:np.array, 
@@ -960,9 +961,9 @@ def score_tiles(img_np:np.array,
     none = 0
     
     
-    rois_downsample_level = []
-    for roi in rois:
-        rois_downsample_level.append(roi.change_level_deep_copy(new_level=best_level_for_downsample))
+    #rois_downsample_level = []
+    #for roi in rois:
+    #    rois_downsample_level.append(roi.change_level_deep_copy(new_level=best_level_for_downsample))
     
     tile_indices = get_tile_indices(wsi_scaled_height, wsi_scaled_width, tile_height_scaled, tile_width_scaled)
     for ti in tile_indices:
@@ -989,13 +990,16 @@ def score_tiles(img_np:np.array,
         if (o_r_e - o_r_s) > tile_height:
             o_r_e -= 1
 
-        # short circuit here, if the tile is not in one of the rois
+        
         tile_polygon = shapely.geometry.box(minx=o_c_s, miny=o_r_s, maxx=o_c_e, maxy=o_r_e)
-        if(not is_tile_in_one_of_the_rois(rois=rois, 
-                                      tile=tile_polygon, 
-                                      minimal_tile_roi_intersection_ratio=minimal_tile_roi_intersection_ratio)):
+        rois_the_current_tile_is_in = get_rois_the_given_tile_is_in(rois=rois, 
+                                                 tile=tile_polygon, 
+                                                 minimal_tile_roi_intersection_ratio=minimal_tile_roi_intersection_ratio)
+        # short circuit here, if the tile is not in one of the rois
+        if(len(rois_the_current_tile_is_in) == 0):
             continue
-                
+                                
+        roi = rois_the_current_tile_is_in[0]     
         count += 1  # tile_num            
             
             
