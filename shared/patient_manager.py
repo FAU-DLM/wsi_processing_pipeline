@@ -98,7 +98,7 @@ class PatientManager:
         
         # empty the lists, in case this function is called multiple times
         self.__patients = []
-       
+        __rois = []
         #key: patient_id; value: Patient object
         patient_id_to_patient = {}
         for tilesummary in tqdm(tilesummaries):
@@ -141,6 +141,9 @@ class PatientManager:
             
             assert (rois != None and len(rois) > 0)
             for roi in rois:
+                
+                __rois.append(roi)
+                
                 roi.reset_tiles() #reset tiles in case this function is called multiple times
                 current_slide.add_region_of_interest(roi)
                 roi.whole_slide_image = current_slide
@@ -151,8 +154,8 @@ class PatientManager:
                         roi.add_tile(tile)
                         tile.labels = roi.labels
                         
-        rs = self.get_rois(dataset_type=shared.enums.DatasetType.all)
-        roi_ids = [r.roi_id for r in rs]
+        #__rois = self.get_rois(dataset_type=shared.enums.DatasetType.all)
+        roi_ids = [r.roi_id for r in __rois]
         if(len(roi_ids) != len(set(roi_ids))):
             raise ValueError('The rois do not have unique ids.')
             
