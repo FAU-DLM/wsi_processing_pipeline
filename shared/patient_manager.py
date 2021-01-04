@@ -11,7 +11,7 @@ Path.ls = lambda x: [p for p in list(x.iterdir()) if '.ipynb_checkpoints' not in
 import functools
 from sklearn.model_selection import StratifiedKFold, KFold
 import shared
-from shared.enums import DatasetType
+from shared.enums import DatasetType, EvaluationLevel
 from shared import roi
 import numpy as np
 import sklearn
@@ -305,11 +305,11 @@ class PatientManager:
         ids_train, ids_val, ids_test = splitter(patient_ids)              
         for patient in self.__get_patients():
             if(patient.patient_id in ids_val):
-                patient.dataset_type = DatasetType.validation
+                patient.dataset_type = shared.enums.DatasetType.validation
             elif(patient.patient_id in ids_train):
-                patient.dataset_type = DatasetType.train
+                patient.dataset_type = shared.enums.DatasetType.train
             elif(patient.patient_id in ids_test):
-                patient.dataset_type = DatasetType.test
+                patient.dataset_type = shared.enums.DatasetType.test
             else:
                 assert False
     
@@ -453,7 +453,9 @@ class PatientManager:
 ############################################# getter methods ######################################################################
     
     def get_patients(self, dataset_type:shared.enums.DatasetType)->List[shared.patient.Patient]:
-        return [p for p in self.__get_patients() if(dataset_type == shared.enums.DatasetType.all or p.dataset_type == dataset_type)]
+        return [p for p in self.__get_patients() if(dataset_type == shared.enums.DatasetType.all \
+                                                    or 'DatasetType.all' in str(dataset_type)\
+                                                    or isinstance(p.dataset_type, type(dataset_type)))]
     
     
     def __get_objects_according_to_evaluation_level(self, 
@@ -463,7 +465,8 @@ class PatientManager:
                                                                  shared.wsi.WholeSlideImage, \
                                                                  shared.case.Case]]:
         objs = None
-        if(level == shared.enums.EvaluationLevel.tile):
+        
+        if(level == shared.enums.EvaluationLevel.tile or str(level) == 'EvaluationLevel.tile'):
             objs = self.get_tiles(dataset_type = dataset_type)
         elif(level == shared.enums.EvaluationLevel.slide):
             objs = self.get_wsis(dataset_type=dataset_type)
