@@ -561,7 +561,8 @@ def WsisToTilesParallel(wsi_paths:List[pathlib.Path],
                              return_as_tilesummary_object = True, 
                              wsi_path_to_rois:Dict[pathlib.Path, List[shared.roi.RegionOfInterestPolygon]] = None,
                              minimal_tile_roi_intersection_ratio:float = 1.0,
-                             verbose=False)-> Union[List[TileSummary], pandas.DataFrame]:
+                             verbose=False, 
+                             number_of_processes = None)-> Union[List[TileSummary], pandas.DataFrame]:
     """
     The method WsiToTiles for a list of WSIs/ROIs in parallel.
     
@@ -588,6 +589,8 @@ def WsisToTilesParallel(wsi_paths:List[pathlib.Path],
     minimal_tile_roi_intersection_ratio: [0.0, 1.0] 
                                          (intersection area between roi and tile)/tile area >= tile_roi_intersection_ratio so 
                                           that a tile will be used for further calculations
+    number_of_processes: if None, number_of_processes will be the number of cpu cores
+    
     Return:
     if return_as_tilesummary_object == True:
        a List of TileSummary objects will be returned
@@ -604,7 +607,7 @@ def WsisToTilesParallel(wsi_paths:List[pathlib.Path],
     def error(e):
         print(e)
     
-    with multiprocessing.Pool() as pool:
+    with multiprocessing.Pool(processes=number_of_processes) as pool:
         for p in wsi_paths:
             pool.apply_async(WsiToTiles, 
                              kwds={"wsi_path":p,                                    
