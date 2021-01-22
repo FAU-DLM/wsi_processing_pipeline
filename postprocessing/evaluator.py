@@ -70,14 +70,30 @@ class Evaluator:
             n_correctly_predicted[Class] = 0
             
         for o in tqdm(objs):
+            #print(o.path)
             y_true = o.get_labels()
+            #print(f'y_true: {y_true}')
             y_pred = o.predictions_thresh
+            #print(f'y_pred: {y_pred}')
+            y_pred_raw = o.predictions_raw
+            #print(f'y_pred_raw: {y_pred_raw}')            
             for Class, boolean_value in y_pred.items():
                 # if the class appears in the labels and the class was predicted 
                 # or the class does not appear in the labels and was not predicted 
                 # => correct prediction
                 if((Class in y_true and boolean_value) or (Class not in y_true and (not boolean_value))):
+                    #print('INSIDE IF')
+                    #print(f'class: {Class}')
+                    #print(f'bool: {boolean_value}')
+                    #print('')
                     n_correctly_predicted[Class] += 1
+                    
+                    
+            #print('')        
+            #print('------------------------------------------------------------------------------------')
+            #print('')
+               
+        #print(f'n_correctly_predicted: {n_correctly_predicted}')
         
         accuracies = {}
         for Class, n in n_correctly_predicted.items():
