@@ -185,34 +185,25 @@ class Predictor:
     
     
     def __calculate_predictions_for_one_wsi_or_case(self, 
-                                                    wsi_or_case:Union[shared.wsi.WholeSlideImage,shared.case.Case], 
-                                                    thresholds_tile_level:Dict[str, float], 
-                                                    thresholds_higher_level:Dict[str, float]):
+                                                    wsi_or_case:Union[shared.wsi.WholeSlideImage,shared.case.Case],  
+                                                    thresholds:Dict[str, float]):
         """
         After predict_on_tiles was called, this functions uses the predictions on tile level to calculate predictions for
         the given whole-slide image/case and saves it in the WholeSlideImage/Case object.
+        The raw predictions of the wsi's/case's tiles are summed up for each class and divided by the number of tiles. This results
+        in the raw predictions for the wsi/case.
+        Then the <thresholds> are applied to get the predicted classes.
         Arguments:
             wsi_or_case: WholeSlideImage or Case object 
             thresholds: dictionary with the class names as key (class names can be obtained with self.get_classes()) and
                         thresholds (between 0 and 1) as values
                         
-                        - thresholds_tile_level: predict_on_tiles() stored the raw prediction probabilities between 0 and 1
-                                                    in each Tile object. These thresholds will be used to determine the
-                                                    predicted classes for each Tile.
-                        - thresholds_higher_level: example: The wsi/case has 100 tiles in total.
-                                                            The threshold for class A is 0.5. If for 50 or 
-                                                            more tiles class A is predicted, the wsi/case will also be 
-                                                            labeled with that class.
         """        
         # checks
         for c in self.get_classes():
-            if(c not in thresholds_tile_level.keys()):
-                raise ValueError(f'{c} missing in the thresholds_tile_level dictionary\'s keys')
-            if(c not in thresholds_higher_level.keys()):
-                raise ValueError(f'{c} missing in the thresholds_higher_level dictionary\'s keys')
-                
-        assert thresholds_higher_level.keys() == thresholds_tile_level.keys()
-        
+            if(c not in thresholds.keys()):
+                raise ValueError(f'{c} missing in the thresholds dictionary\'s keys')
+                        
         ##
         # iterate over all tiles and sums up all raw predictions for each class
         ##
@@ -221,11 +212,11 @@ class Predictor:
         #class_count = np.zeros(len(thresholds_tile_level))
         
         # new version: raw predictions over all tiles are summed up
-        summed_up_raw_preds = np.zeros(len(thresholds_tile_level))
+        summed_up_raw_preds = np.zeros(len(thresholds))
         for tile in wsi_or_case.get_tiles():
             
             assert tile.predictions_raw != None
-            assert tile.predictions_raw.keys() == thresholds_tile_level.keys()
+            assert tile.predictions_raw.keys() == thresholds.keys()
             
             tile_count += 1
             
@@ -240,7 +231,7 @@ class Predictor:
         # and apply threshold
         ##
         preds_raw = summed_up_raw_preds/tile_count
-        preds_thresh = preds_raw >= np.array(list(thresholds_higher_level.values()))
+        preds_thresh = preds_raw >= np.array(list(thresholds.values()))
         
         ##
         # convert it into more human friendly readable dictionary with classes as keys
@@ -258,83 +249,60 @@ class Predictor:
     
     def calculate_predictions_for_one_wsi(self, 
                                             wsi:shared.wsi.WholeSlideImage, 
-                                            thresholds_tile_level:Dict[str, float], 
-                                            thresholds_higher_level:Dict[str, float]):
+                                            thresholds:Dict[str, float]):
         """
         After predict_on_tiles was called, this functions uses the predictions on tile level to calculate predictions for
         the given whole-slide image and saves it in the WholeSlideImage object.
+        The raw predictions of the wsi's tiles are summed up for each class and divided by the number of tiles. This results
+        in the raw predictions for the wsi.
+        Then the <thresholds> are applied to get the predicted classes.
         Arguments:
-            wsi: WholeSlideImage
+            wsi: WholeSlideImage 
             thresholds: dictionary with the class names as key (class names can be obtained with self.get_classes()) and
                         thresholds (between 0 and 1) as values
-                        
-                        - thresholds_tile_level: predict_on_tiles() stored the raw prediction probabilities between 0 and 1
-                                                    in each Tile object. These thresholds will be used to determine the
-                                                    predicted classes for each Tile.
-                        - thresholds_higher_level: example: The wsi has 100 tiles in total.
-                                                            The threshold for class A is 0.5. If for 50 or 
-                                                            more tiles class A is predicted, the wsi will also be 
-                                                            labeled with that class.
         """
-        self.__calculate_predictions_for_one_wsi_or_case(wsi_or_case=wsi, 
-                                                         thresholds_tile_level=thresholds_tile_level, 
-                                                        thresholds_higher_level=thresholds_higher_level)
+        self.__calculate_predictions_for_one_wsi_or_case(wsi_or_case=wsi,  
+                                                         thresholds=thresholds)
     
     def calculate_predictions_for_one_case(self, 
                                             case:shared.case.Case, 
-                                            thresholds_tile_level:Dict[str, float], 
-                                            thresholds_higher_level:Dict[str, float]):
+                                            thresholds:Dict[str, float]):
         """
         After predict_on_tiles was called, this functions uses the predictions on tile level to calculate predictions for
         the given case and saves it in the Case object.
+        The raw predictions of the case's tiles are summed up for each class and divided by the number of tiles. This results
+        in the raw predictions for the case.
+        Then the <thresholds> are applied to get the predicted classes.
         Arguments:
-            case: Case
+            case: Case object 
             thresholds: dictionary with the class names as key (class names can be obtained with self.get_classes()) and
                         thresholds (between 0 and 1) as values
-                        
-                        - thresholds_tile_level: predict_on_tiles() stored the raw prediction probabilities between 0 and 1
-                                                    in each Tile object. These thresholds will be used to determine the
-                                                    predicted classes for each Tile.
-                        - thresholds_higher_level: example: The case has 100 tiles in total.
-                                                            The threshold for class A is 0.5. If for 50 or 
-                                                            more tiles class A is predicted, the case will also be 
-                                                            labeled with that class.
         """
-        self.__calculate_predictions_for_one_wsi_or_case(wsi_or_case=case, 
-                                                         thresholds_tile_level=thresholds_tile_level, 
-                                                        thresholds_higher_level=thresholds_higher_level)
+        self.__calculate_predictions_for_one_wsi_or_case(wsi_or_case=case,  
+                                                        thresholds=thresholds)
         
     
     def calculate_predictions_up_to_case_level(self, 
                                                   dataset_type:shared.enums.DatasetType, 
-                                                  thresholds_tile_level:Dict[str, float], 
-                                                  thresholds_higher_level:Dict[str, float]):
+                                                  thresholds:Dict[str, float]):
         """
-        After predict_on_tiles was called, this functions applies the given thresholds to calculate predictions for tiles,
-        slides and cases.
+        After predict_on_tiles was called, this functions uses the predictions on tile level to calculate predictions for
+        the given whole-slide image/case and saves it in the WholeSlideImage/Case object.
+        The raw predictions of the wsi's/case's tiles are summed up for each class and divided by the number of tiles. This results
+        in the raw predictions for the wsi/case.
+        Then the <thresholds> are applied to get the predicted classes.
         Arguments:
-            dataset_type: only patients from that dataset will taken into account
+            wsi_or_case: WholeSlideImage or Case object 
             thresholds: dictionary with the class names as key (class names can be obtained with self.get_classes()) and
                         thresholds (between 0 and 1) as values
-                        
-                        - thresholds_tile_level: predict_on_tiles() stored the raw prediction probabilities between 0 and 1
-                                                    in each Tile object. These thresholds will be used to determine the
-                                                    predicted classes for each Tile.
-                        - thresholds_higher_level: example: There is a case with 100 tiles in total.
-                                                            The threshold for class A is 0.5. If for 50 or 
-                                                            more tiles class A is predicted, the case will also be 
-                                                            labeled with that class.
-                                                    Same way of calculation on wsi level.
         """               
         for patient in self.patient_manager.get_patients(dataset_type=dataset_type):
             for case in patient.get_cases():
                 self.calculate_predictions_for_one_case(case=case, 
-                                                       thresholds_tile_level=thresholds_tile_level, 
-                                                       thresholds_higher_level=thresholds_higher_level)
+                                                       thresholds=thresholds)
                 for wsi in case.get_whole_slide_images():
                     self.calculate_predictions_for_one_wsi(wsi=wsi, 
-                                                       thresholds_tile_level=thresholds_tile_level, 
-                                                       thresholds_higher_level=thresholds_higher_level)
+                                                       thresholds=thresholds)
                     for roi in wsi.get_regions_of_interest():
                         for tile in roi.get_tiles():
                             self.calculate_predictions_for_one_tile(tile=tile, thresholds=thresholds_tile_level)
