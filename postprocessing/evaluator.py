@@ -307,7 +307,7 @@ class Evaluator:
         return metric(y_pred=y_pred, y_true=y_true)
         
     
-    def get_orderd_by_metric(self, 
+    def get_ordered_by_metric(self, 
                           dataset_type:shared.enums.DatasetType, 
                           level:shared.enums.EvaluationLevel, 
                           k:int = 10, 
