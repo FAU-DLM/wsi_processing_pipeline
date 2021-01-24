@@ -214,23 +214,32 @@ class Predictor:
         assert thresholds_higher_level.keys() == thresholds_tile_level.keys()
         
         ##
-        # iterate over all tiles and count how many tiles were predicted with a certain class
+        # iterate over all tiles and sums up all raw predictions for each class
         ##
         tile_count = 0
-        class_count = np.zeros(len(thresholds_tile_level))
+        # old version: thresholded preds (yes or no) over all tiles were summed up
+        #class_count = np.zeros(len(thresholds_tile_level))
+        
+        # new version: raw predictions over all tiles are summed up
+        summed_up_raw_preds = np.zeros(len(thresholds_tile_level))
         for tile in wsi_or_case.get_tiles():
             
             assert tile.predictions_raw != None
             assert tile.predictions_raw.keys() == thresholds_tile_level.keys()
             
             tile_count += 1
-            class_count += tile.calculate_predictions_ohe(thresholds=thresholds_tile_level)
+            
+            # old version: thresholded preds (yes or no) over all tiles were summed up
+            #class_count += tile.calculate_predictions_ohe(thresholds=thresholds_tile_level)
+            
+            # new version: raw predictions over all tiles are summed up
+            summed_up_raw_preds += np.array(list(tile.predictions_raw.values()))
         
         ##
-        # calculate the ration: tiles with that class / all tiles
+        # divide summed up raw predictions by number of tiles
         # and apply threshold
         ##
-        preds_raw = class_count/tile_count
+        preds_raw = summed_up_raw_preds/tile_count
         preds_thresh = preds_raw >= np.array(list(thresholds_higher_level.values()))
         
         ##
