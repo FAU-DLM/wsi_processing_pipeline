@@ -65,18 +65,30 @@ class Evaluator:
         objs = self.__get_objects_according_to_evaluation_level(level=level, dataset_type=dataset_type)
         
         #key:class; value: number of correct predictions
+        n_objs = 0
         n_correctly_predicted = {}
         for Class in self.predictor.get_classes():
             n_correctly_predicted[Class] = 0
             
         for o in tqdm(objs):
             #print(o.path)
+            
+            y_pred_raw = o.predictions_raw
+            # if the raw predictions contain NaN values, this is mostly because the wsi/case did not contain any tile
+            # and therefore during prediction calculation a division by 0 resulted in NaN values
+            # This is fixed in the latest version of the patient_manager. It now checks for tilesummaries, that do not
+            # conatin any top tile
+            if(numpy.isnan(y_pred_raw).any()):
+                continue
+            #print(f'y_pred_raw: {y_pred_raw}')
+            
+            n_objs += 1
+            
             y_true = o.get_labels()
             #print(f'y_true: {y_true}')
             y_pred = o.predictions_thresh
             #print(f'y_pred: {y_pred}')
-            y_pred_raw = o.predictions_raw
-            #print(f'y_pred_raw: {y_pred_raw}')            
+           
             for Class, boolean_value in y_pred.items():
                 # if the class appears in the labels and the class was predicted 
                 # or the class does not appear in the labels and was not predicted 
@@ -98,7 +110,7 @@ class Evaluator:
         accuracies = {}
         for Class, n in n_correctly_predicted.items():
             # accuracy = number of correctly predicted objects divided by totoal number of objects
-            accuracies[Class] = n_correctly_predicted[Class]/len(objs)
+            accuracies[Class] = n_correctly_predicted[Class]/n_objs
             
         return accuracies
     
@@ -114,6 +126,12 @@ class Evaluator:
             y_preds_raw = [] # list of the predicted percentages
             y_true = [] # list of True and False
             for obj in objs:
+                # if the raw predictions contain NaN values, this is mostly because the wsi/case did not contain any tile
+                # and therefore during prediction calculation a division by 0 resulted in NaN values
+                # This is fixed in the latest version of the patient_manager. It now checks for tilesummaries, that do not
+                # conatin any top tile
+                if(numpy.isnan(obj.predictions_raw).any()):
+                    continue
                 y_preds_raw.append(obj.predictions_raw[Class])
                 y_true.append((Class in obj.get_labels()))
                 
@@ -148,6 +166,13 @@ class Evaluator:
             probs_true_negative = []
             
             for obj in objs:
+                # if the raw predictions contain NaN values, this is mostly because the wsi/case did not contain any tile
+                # and therefore during prediction calculation a division by 0 resulted in NaN values
+                # This is fixed in the latest version of the patient_manager. It now checks for tilesummaries, that do not
+                # conatin any top tile
+                if(numpy.isnan(obj.predictions_raw).any()):
+                    continue
+                    
                 predicted_prob = obj.predictions_raw[Class]
                 if(Class in obj.get_labels()):
                     probs_true_positive.append(predicted_prob)
@@ -176,6 +201,12 @@ class Evaluator:
         y_true = []
         y_pred = []
         for obj in objs:
+            # if the raw predictions contain NaN values, this is mostly because the wsi/case did not contain any tile
+            # and therefore during prediction calculation a division by 0 resulted in NaN values
+            # This is fixed in the latest version of the patient_manager. It now checks for tilesummaries, that do not
+            # conatin any top tile
+            if(numpy.isnan(obj.predictions_raw).any()):
+                continue
             y_true.append(obj.get_labels_one_hot_encoded())
             y_pred.append(obj.get_predictions_one_hot_encoded())
         
@@ -336,6 +367,12 @@ class Evaluator:
         """
         objs = self.__get_objects_according_to_evaluation_level(dataset_type=dataset_type, level=level)
         for obj in objs:
+            # if the raw predictions contain NaN values, this is mostly because the wsi/case did not contain any tile
+            # and therefore during prediction calculation a division by 0 resulted in NaN values
+            # This is fixed in the latest version of the patient_manager. It now checks for tilesummaries, that do not
+            # conatin any top tile
+            if(numpy.isnan(obj.predictions_raw).any()):
+                continue
             obj.metric = self.__calculate_metric(obj=obj, metric=metric)
         objs.sort(key=lambda o: o.metric, reverse=descending)
         return objs[:k]
@@ -376,6 +413,12 @@ class Evaluator:
         level_name = str(level).split('.')[1]
         df = pd.DataFrame(columns=[level_name, 'target', 'predicted', 'probabilities', 'metric'])
         for o in objs:
+            # if the raw predictions contain NaN values, this is mostly because the wsi/case did not contain any tile
+            # and therefore during prediction calculation a division by 0 resulted in NaN values
+            # This is fixed in the latest version of the patient_manager. It now checks for tilesummaries, that do not
+            # conatin any top tile
+            if(numpy.isnan(o.predictions_raw).any()):
+                continue
             predicted = []
             for Class, bool_value in o.predictions_thresh.items():
                 if(bool_value):
