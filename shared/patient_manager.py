@@ -102,6 +102,12 @@ class PatientManager:
         #key: patient_id; value: Patient object
         patient_id_to_patient = {}
         for tilesummary in tqdm(tilesummaries):
+            
+            # skip tilesummaries with 0 tiles
+            if(len(tilesummary.top_tiles()) == 0):
+                continue
+            
+            
             ###
             # patient
             ###
