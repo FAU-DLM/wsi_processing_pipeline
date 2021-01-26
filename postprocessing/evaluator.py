@@ -77,8 +77,8 @@ class Evaluator:
             # if the raw predictions contain NaN values, this is mostly because the wsi/case did not contain any tile
             # and therefore during prediction calculation a division by 0 resulted in NaN values
             # This is fixed in the latest version of the patient_manager. It now checks for tilesummaries, that do not
-            # conatin any top tile
-            if(numpy.isnan(y_pred_raw).any()):
+            # contain any top tile
+            if(numpy.isnan(list(y_pred_raw.values())).any()):
                 continue
             #print(f'y_pred_raw: {y_pred_raw}')
             
@@ -129,8 +129,8 @@ class Evaluator:
                 # if the raw predictions contain NaN values, this is mostly because the wsi/case did not contain any tile
                 # and therefore during prediction calculation a division by 0 resulted in NaN values
                 # This is fixed in the latest version of the patient_manager. It now checks for tilesummaries, that do not
-                # conatin any top tile
-                if(numpy.isnan(obj.predictions_raw).any()):
+                # contain any top tile
+                if(numpy.isnan(list(obj.predictions_raw.values())).any()):
                     continue
                 y_preds_raw.append(obj.predictions_raw[Class])
                 y_true.append((Class in obj.get_labels()))
@@ -169,8 +169,8 @@ class Evaluator:
                 # if the raw predictions contain NaN values, this is mostly because the wsi/case did not contain any tile
                 # and therefore during prediction calculation a division by 0 resulted in NaN values
                 # This is fixed in the latest version of the patient_manager. It now checks for tilesummaries, that do not
-                # conatin any top tile
-                if(numpy.isnan(obj.predictions_raw).any()):
+                # contain any top tile
+                if(numpy.isnan(list(y_pred_raw.values())).any()):
                     continue
                     
                 predicted_prob = obj.predictions_raw[Class]
@@ -204,8 +204,8 @@ class Evaluator:
             # if the raw predictions contain NaN values, this is mostly because the wsi/case did not contain any tile
             # and therefore during prediction calculation a division by 0 resulted in NaN values
             # This is fixed in the latest version of the patient_manager. It now checks for tilesummaries, that do not
-            # conatin any top tile
-            if(numpy.isnan(obj.predictions_raw).any()):
+            # contain any top tile
+            if(numpy.isnan(y_pred).any()):
                 continue
             y_true.append(obj.get_labels_one_hot_encoded())
             y_pred.append(obj.get_predictions_one_hot_encoded())
@@ -370,8 +370,8 @@ class Evaluator:
             # if the raw predictions contain NaN values, this is mostly because the wsi/case did not contain any tile
             # and therefore during prediction calculation a division by 0 resulted in NaN values
             # This is fixed in the latest version of the patient_manager. It now checks for tilesummaries, that do not
-            # conatin any top tile
-            if(numpy.isnan(obj.predictions_raw).any()):
+            # contain any top tile
+            if(numpy.isnan(list(y_pred_raw.values())).any()):
                 continue
             obj.metric = self.__calculate_metric(obj=obj, metric=metric)
         objs.sort(key=lambda o: o.metric, reverse=descending)
@@ -416,8 +416,8 @@ class Evaluator:
             # if the raw predictions contain NaN values, this is mostly because the wsi/case did not contain any tile
             # and therefore during prediction calculation a division by 0 resulted in NaN values
             # This is fixed in the latest version of the patient_manager. It now checks for tilesummaries, that do not
-            # conatin any top tile
-            if(numpy.isnan(o.predictions_raw).any()):
+            # contain any top tile
+            if(numpy.isnan(list(y_pred_raw.values())).any()):
                 continue
             predicted = []
             for Class, bool_value in o.predictions_thresh.items():

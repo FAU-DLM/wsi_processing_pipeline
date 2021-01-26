@@ -238,8 +238,8 @@ class Predictor:
         ##
         preds_raw_dict = {}
         preds_thresh_dict = {}
-        for i in range(0, len(class_count)):
-            class_name = list(thresholds_tile_level.keys())[i]
+        for i in range(0, len(thresholds)):
+            class_name = list(thresholds.keys())[i]
             preds_raw_dict[class_name] = preds_raw[i]
             preds_thresh_dict[class_name] = preds_thresh[i]
             
@@ -305,7 +305,7 @@ class Predictor:
                                                        thresholds=thresholds)
                     for roi in wsi.get_regions_of_interest():
                         for tile in roi.get_tiles():
-                            self.calculate_predictions_for_one_tile(tile=tile, thresholds=thresholds_tile_level)
+                            self.calculate_predictions_for_one_tile(tile=tile, thresholds=thresholds)
     
     def export_dataframe(self, 
                          dataset_type:shared.enums.DatasetType, 
