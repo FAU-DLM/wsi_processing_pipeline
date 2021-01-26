@@ -393,7 +393,8 @@ def ExtractTileFromPILImage(path:Union[str, pathlib.Path], x:int, y:int, width:i
     return ExtractTileFromWSI(path=path, x=x, y=y, width=width, height=height, level=0);
 
 
-def WsiOrROIToTiles(wsi_path:pathlib.Path, 
+def WsiOrROIToTiles(wsi_path:pathlib.Path,
+                    shifted_grid:bool,
                tiles_folder_path:pathlib.Path,
                tile_height:int, 
                tile_width:int,
@@ -411,7 +412,8 @@ def WsiOrROIToTiles(wsi_path:pathlib.Path,
     raise DeprecationWarning('The function WsiOrRoiToTiles was renamed to WsiToTiles')
 
 
-def WsiToTiles(wsi_path:pathlib.Path, 
+def WsiToTiles(wsi_path:pathlib.Path,
+               shifted_grid:bool,
                tile_height:int, 
                tile_width:int,
                minimal_acceptable_tile_height:float = 0.7,
@@ -432,6 +434,10 @@ def WsiToTiles(wsi_path:pathlib.Path,
     
     Arguments:
     wsi_path: Path to a WSI or ROI(=already extracted part of a wsi in e.g. .png format)
+    shifted_grid: During the process at first all possible tile locations are calculated starting at (0,0) (upper left corner)
+                    of the wsi. If shifted grid is True, there will be 6 more grids starting at (1/3*tile_width, 0),
+                    (2/3*tile_width, 0), (0, 1/3*tile_height), (0, 2/3*tile_height), (1/3*tile_width, 1/3*tile_height),
+                    (2/3*tile_width, 2/3*tile_height)
     tile_heigth: Number of pixels tile height.
     tile_width: Number of pixels tile width.
     minimal_acceptable_tile_height: factor between 0.0 and 1.0. percentage of orig_h ;affects tiles at the edges, which 
@@ -480,6 +486,7 @@ def WsiToTiles(wsi_path:pathlib.Path,
                 
     img_pil_filtered = filter.filter_img(img_pil)
     tilesummary = create_tilesummary(wsiPath=wsi_path,
+                                     shifted_grid=shifted_grid,
                                      tiles_folder_path=tiles_folder_path, 
                                      img_pil=img_pil, 
                                      img_pil_filtered=img_pil_filtered, 
@@ -528,7 +535,8 @@ def WsiToTiles(wsi_path:pathlib.Path,
         else:
             return pd.DataFrame(rows_list).set_index('tile_name', inplace=False)
         
-def WsiOrROIToTilesMultithreaded(wsi_paths:List[pathlib.Path], 
+def WsiOrROIToTilesMultithreaded(wsi_paths:List[pathlib.Path],
+                             shifted_grid:bool,
                              tiles_folder_path:pathlib.Path,
                              tile_height:int, 
                              tile_width:int,
@@ -547,7 +555,8 @@ def WsiOrROIToTilesMultithreaded(wsi_paths:List[pathlib.Path],
         
         
       
-def WsisToTilesParallel(wsi_paths:List[pathlib.Path], 
+def WsisToTilesParallel(wsi_paths:List[pathlib.Path],
+                             shifted_grid:bool,
                              tile_height:int, 
                              tile_width:int,
                              minimal_acceptable_tile_height:float = 0.7,
@@ -568,6 +577,10 @@ def WsisToTilesParallel(wsi_paths:List[pathlib.Path],
     
     Arguments:
     wsi_paths: A list of paths to the WSIs or ROIs(=preextracted png files from WSIs)
+    shifted_grid: During the process at first all possible tile locations are calculated starting at (0,0) (upper left corner)
+                    of the wsi. If shifted grid is True, there will be 6 more grids starting at (1/3*tile_width, 0),
+                    (2/3*tile_width, 0), (0, 1/3*tile_height), (0, 2/3*tile_height), (1/3*tile_width, 1/3*tile_height),
+                    (2/3*tile_width, 2/3*tile_height)
     tile_heigth: Number of pixels tile height.
     tile_width: Number of pixels tile width.
     minimal_acceptable_tile_height: factor between 0.0 and 1.0. percentage of orig_h ;affects tiles at the edges, which 
@@ -610,7 +623,8 @@ def WsisToTilesParallel(wsi_paths:List[pathlib.Path],
     with multiprocessing.Pool(processes=number_of_processes) as pool:
         for p in wsi_paths:
             pool.apply_async(WsiToTiles, 
-                             kwds={"wsi_path":p,                                    
+                             kwds={"wsi_path":p,
+                                   "shifted_grid":shifted_grid,
                                    "tile_height":tile_height, 
                                    "tile_width":tile_width,
                                    "minimal_acceptable_tile_height":minimal_acceptable_tile_height,
@@ -676,6 +690,7 @@ def wsi_to_scaled_pil_image(wsi_filepath:pathlib.Path, scale_factor = 32, level 
 
 
 def create_tilesummary(wsiPath,
+                       shifted_grid:bool,
                         tiles_folder_path,
                         img_pil:PIL.Image.Image, 
                         img_pil_filtered:PIL.Image.Image, 
@@ -711,6 +726,7 @@ def create_tilesummary(wsiPath,
     tile_sum = score_tiles(img_np=np_img, 
                            img_np_filtered=np_img_filtered, 
                            wsi_path=wsiPath,
+                           shifted_grid=shifted_grid,
                            tiles_folder_path=tiles_folder_path,
                            tile_height=tile_height,
                            tile_width=tile_width,
@@ -733,52 +749,67 @@ def create_tilesummary(wsiPath,
 
 
 def get_num_tiles(rows, cols, row_tile_size, col_tile_size):
-  """
-  Obtain the number of vertical and horizontal tiles that an image can be divided into given a row tile size and
-  a column tile size.
+    """
+    Obtain the number of vertical and horizontal tiles that an image can be divided into given a row tile size and
+    a column tile size.
+  
+    Args:
+      rows: Number of rows.
+      cols: Number of columns.
+      row_tile_size: Number of pixels in a tile row.
+      col_tile_size: Number of pixels in a tile column.
+  
+    Returns:
+      Tuple consisting of the number of vertical tiles and the number of horizontal tiles that the image can be divided
+      into given the row tile size and the column tile size.
+    """
+    num_row_tiles = math.ceil(rows / row_tile_size)
+    num_col_tiles = math.ceil(cols / col_tile_size)
+    return num_row_tiles, num_col_tiles
 
-  Args:
-    rows: Number of rows.
-    cols: Number of columns.
-    row_tile_size: Number of pixels in a tile row.
-    col_tile_size: Number of pixels in a tile column.
-
-  Returns:
-    Tuple consisting of the number of vertical tiles and the number of horizontal tiles that the image can be divided
-    into given the row tile size and the column tile size.
-  """
-  num_row_tiles = math.ceil(rows / row_tile_size)
-  num_col_tiles = math.ceil(cols / col_tile_size)
-  return num_row_tiles, num_col_tiles
-
-
-def get_tile_indices(rows, cols, row_tile_size, col_tile_size):
-  """
-  Obtain a list of tile coordinates (starting row, ending row, starting column, ending column, row number, column number).
-
-  Args:
-    rows: Number of rows. (height in pixels)
-    cols: Number of columns. (width in pixels)
-    row_tile_size: Number of pixels in a tile row. (tile height in pixels)
-    col_tile_size: Number of pixels in a tile column. (tile width in pixels)
-
-  Returns:
-    List of tuples representing tile coordinates consisting of starting row, ending row,
-    starting column, ending column, row number, column number.
-
-    row numbers from 1 to rows/row_tile_size (rounded up)
-    column numbers from 1 to cols/col_tile_size (rounded up)
-  """
-  indices = list()
-  num_row_tiles, num_col_tiles = get_num_tiles(rows, cols, row_tile_size, col_tile_size)
-  for r in range(0, num_row_tiles):
-    start_r = r * row_tile_size
-    end_r = ((r + 1) * row_tile_size) if (r < num_row_tiles - 1) else rows
-    for c in range(0, num_col_tiles):
-      start_c = c * col_tile_size
-      end_c = ((c + 1) * col_tile_size) if (c < num_col_tiles - 1) else cols
-      indices.append((start_r, end_r, start_c, end_c, r + 1, c + 1))
-  return indices
+def get_tile_indices(rows, cols, row_tile_size, col_tile_size, shifted_grid:bool):
+    """
+    Obtain a list of tile coordinates (starting row, ending row, starting column, ending column, row number, column number).
+  
+    Args:
+      rows: Number of rows. (height in pixels)
+      cols: Number of columns. (width in pixels)
+      row_tile_size: Number of pixels in a tile row. (tile height in pixels)
+      col_tile_size: Number of pixels in a tile column. (tile width in pixels)
+      shifted_grid: adds additional shifted grids
+  
+    Returns:
+      List of tuples representing tile coordinates consisting of starting row, ending row,
+      starting column, ending column, row number, column number.
+  
+      row numbers from 1 to rows/row_tile_size (rounded up)
+      column numbers from 1 to cols/col_tile_size (rounded up)
+    """
+    indices = list()
+    num_row_tiles, num_col_tiles = get_num_tiles(rows, cols, row_tile_size, col_tile_size)
+    for r in range(0, num_row_tiles):
+      start_r = r * row_tile_size
+      end_r = ((r + 1) * row_tile_size) if (r < num_row_tiles - 1) else rows
+      for c in range(0, num_col_tiles):
+        start_c = c * col_tile_size
+        end_c = ((c + 1) * col_tile_size) if (c < num_col_tiles - 1) else cols
+        indices.append((start_r, end_r, start_c, end_c, r + 1, c + 1))
+        if(shifted_grid):
+            r_third = int(row_tile_size/3)
+            c_third = int(col_tile_size/3)
+            
+            #only rows shifted
+            indices.append((start_r+r_third, end_r+r_third, start_c, end_c, r + 1, c + 1))
+            indices.append((start_r+2*r_third, end_r+2*r_third, start_c, end_c, r + 1, c + 1))
+            
+            #only columns shifted
+            indices.append((start_r, end_r, start_c+c_third, end_c+c_third, r + 1, c + 1))
+            indices.append((start_r, end_r, start_c+2*c_third, end_c+2*c_third, r + 1, c + 1))
+        
+            #rows and columns shifted
+            indices.append((start_r+r_third, end_r+r_third, start_c+c_third, end_c+c_third, r + 1, c + 1))
+            indices.append((start_r+2*r_third, end_r+2*r_third, start_c+2*c_third, end_c+2*c_third, r + 1, c + 1))
+    return indices
 
 def tile_to_pil_tile(tile:Tile):
       """
@@ -871,6 +902,7 @@ def get_rois_the_given_tile_is_in(rois:List[shared.roi.RegionOfInterestPolygon],
 def score_tiles(img_np:np.array, 
                 img_np_filtered:np.array, 
                 wsi_path:pathlib.Path,
+                shifted_grid:bool,
                 tiles_folder_path:pathlib.Path,
                 tile_height:int, 
                 tile_width:int,
@@ -968,7 +1000,7 @@ def score_tiles(img_np:np.array,
     #for roi in rois:
     #    rois_downsample_level.append(roi.change_level_deep_copy(new_level=best_level_for_downsample))
     
-    tile_indices = get_tile_indices(wsi_scaled_height, wsi_scaled_width, tile_height_scaled, tile_width_scaled)
+    tile_indices = get_tile_indices(wsi_scaled_height, wsi_scaled_width, tile_height_scaled, tile_width_scaled, shifted_grid)
     for ti in tile_indices:
         #coordinates with respect to upper left point of wsi as (0,0) on the level chosen for downsampling
         #r_s: row_start, r_e: row_end  (pixel values in y-dimension)
