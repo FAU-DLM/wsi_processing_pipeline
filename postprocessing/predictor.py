@@ -20,6 +20,7 @@ from shared.enums import DatasetType
 import preprocessing
 import pandas as pd
 from tqdm import tqdm
+import multiprocessing
 
 class Predictor:  
     learner:fastai.learner.Learner = None
@@ -44,6 +45,21 @@ class Predictor:
         self.learner = learner
         self.patient_manager = patient_manager
     
+    def __one_hot_encode(self, vocab:List[Union[str, int]], labels:List[Union[str, int]])->numpy.ndarray:
+        """
+        vocab: List of all possible classes (strings or ints)
+        labels: labels of the object
+        """
+        for l in labels:
+            if(l not in vocab):
+                raise ValueError(f'{l} is in labels but not in vocab.')
+                
+        ohe_labels = np.zeros(len(vocab), dtype=np.int0)
+        for n, v in enumerate(vocab):
+            if(v in labels):
+                ohe_labels[n] = 1
+        return ohe_labels
+        
     def __predict(self, dataloader:fastai.data.core.TfmdDL):
         return self.learner.get_preds(ds_idx=-1, 
                                  dl=dataloader, 
@@ -57,6 +73,9 @@ class Predictor:
                            dataset_type:shared.enums.DatasetType,
                            tile_size:int, 
                            batch_size:int)->typing.Tuple[fastai.data.core.DataLoaders, List[shared.tile.Tile]]:
+        ###
+        # Option 1: build complete new Dataloaders
+        ###
         block_x = None
         get_x = None
         if(pred_type == shared.enums.PredictionType.preextracted_tiles):
@@ -83,6 +102,13 @@ class Predictor:
         #https://forums.fast.ai/t/get-preds-returns-smaller-than-expected-tensor/47519
         dataloader.drop_last = False
         dataloader.shuffle = False
+        
+        
+        ###
+        # Option 2: build test Dataloader from existing learner.dls
+        ###
+        #tiles_to_predict = self.patient_manager.get_tiles(dataset_type = dataset_type)
+        #dataloader = self.learner.dls.test_dl(tiles_to_predict)
         
         return dataloader, tiles_to_predict
     
@@ -132,11 +158,24 @@ class Predictor:
         
     
     
+    def __predict(self, dataset_type:shared.enums.DatasetType, tile):
+        tile.labels_one_hot_encoded = self.__one_hot_encode(vocab=self.get_classes(), labels=tile.get_labels())
+        
+        _,_, preds_raw = self.learner.predict(tile)
+        predictions_raw = {}
+        for Class, pred_raw in zip(self.get_classes(), preds_raw):
+            predictions_raw[Class] = pred_raw            
+        tile.predictions_raw = predictions_raw
+   
+        # TODO
+        #loss = learner.loss_func(torch.tensor(preds_raw.unsqueeze), torch.tensor(y_true_ohe, dtype=torch.float32).unsqueeze(0))
+        #t.loss = loss    
+    
     def predict_on_tiles(self,
                          prediction_type: shared.enums.PredictionType,
-                                      dataset_type:shared.enums.DatasetType, 
-                                      tile_size:int, 
-                                      batch_size:int):
+                         dataset_type:shared.enums.DatasetType, 
+                         tile_size:int, 
+                         batch_size:int):
         """
         Raw predictions (== predicted probabilities for each class) will be saved in each Tile object 
         in the attribute "predictions_raw". No thresholds are applied here.
@@ -150,16 +189,40 @@ class Predictor:
                                                     of interest) on the fly during dataloading.
             dataset_type: only tiles with this dataset_type will be used for prediction
             tile_size: tiles will be resized to this size by the dataloader
-            thresholds: threshold for each class between 0 and 1. If the predicted probability is higher than the
-                        threshold, the tile will be labeled with that class.
         Results:
             
         """
-               
-        self.__buildDl_predict_set_preds(pred_type=prediction_type, 
-                                        dataset_type=dataset_type, 
-                                         tile_size=tile_size, 
-                                         batch_size=batch_size)
+        ###
+        # There is currently a bug in learner.get_preds() which leads to completely wrong predictions
+        # learner.predict is a lot slower, but it gives correct predictions
+        ###
+        #self.__buildDl_predict_set_preds(pred_type=prediction_type, 
+        #                                dataset_type=dataset_type, 
+        #                                 tile_size=tile_size, 
+        #                                 batch_size=batch_size)
+        
+        tiles_to_predict = self.patient_manager.get_tiles(dataset_type = dataset_type)
+        for t in tqdm(tiles_to_predict):
+            self.__predict(dataset_type=dataset_type, tile=t)
+        #pbar = tqdm(total=len(tiles_to_predict))
+        #def update(res):
+        #    pbar.update()
+        #    
+        #def error(e):
+        #    print(e)
+        #
+        #with multiprocessing.Pool(processes=None) as pool:
+        #    for t in tiles_to_predict:
+        #        pool.apply_async(self.__predict, 
+        #                         kwds={"dataset_type":dataset_type,
+        #                               "tile":t}, 
+        #                               callback=update, 
+        #                               error_callback=error)
+        #        
+        #            
+        #    pool.close()
+        #    pool.join()
+
         
     def get_classes(self):
         return self.learner.dls.vocab
