@@ -9,7 +9,8 @@ from visualization.guided_gradcam import GuidedGradCam
 
 from tqdm import tqdm
 import sklearn
-from sklearn.metrics import roc_curve, auc, roc_auc_score
+from sklearn.metrics import roc_curve, auc, roc_auc_score, precision_recall_curve, PrecisionRecallDisplay, average_precision_score,\
+                            RocCurveDisplay
 import matplotlib.pyplot as plt
 import numpy
 import numpy as np
@@ -136,19 +137,60 @@ class Evaluator:
                 y_true.append((Class in obj.get_labels()))
                 
             
-            fpr, tpr, threshold = roc_curve(y_true, y_preds_raw, pos_label=1)
-        
+            fpr, tpr, threshold = roc_curve(y_true, y_preds_raw, pos_label=1)       
             roc_auc = auc(fpr, tpr)
             
-            plt.title(f'{Class}')
-            plt.plot(fpr, tpr, 'b', label = 'AUC = %0.2f' % roc_auc)
-            plt.legend(loc = 'lower right')
-            plt.plot([0, 1], [0, 1],'r--')
-            plt.xlim([0, 1])
-            plt.ylim([0, 1])
-            plt.ylabel('True Positive Rate')
-            plt.xlabel('False Positive Rate')
-            plt.show()
+            #plt.title(f'{Class}')
+            #plt.plot(fpr, tpr, 'b', label = 'AUC = %0.2f' % roc_auc)
+            #plt.legend(loc = 'lower right')
+            #plt.plot([0, 1], [0, 1],'r--')
+            #plt.xlim([0, 1])
+            #plt.ylim([0, 1])
+            #plt.ylabel('True Positive Rate')
+            #plt.xlabel('False Positive Rate')
+            #plt.show()
+            roc_display = RocCurveDisplay(fpr=fpr, tpr=tpr, roc_auc=roc_auc, estimator_name=Class).plot()
+            
+
+                        
+    def plot_precision_recall_curves(self, 
+                                        level:shared.enums.EvaluationLevel, 
+                                        dataset_type:shared.enums.DatasetType):
+        """
+        Plots precision-recall curves for each class in self.predictor.get_classes().
+        """
+        objs = self.__get_objects_according_to_evaluation_level(level=level, dataset_type=dataset_type)
+        classes = self.predictor.get_classes()
+        for Class in tqdm(classes):
+            y_preds_raw = [] # list of the predicted percentages
+            y_true = [] # list of True and False
+            for obj in objs:
+                # if the raw predictions contain NaN values, this is mostly because the wsi/case did not contain any tile
+                # and therefore during prediction calculation a division by 0 resulted in NaN values
+                # This is fixed in the latest version of the patient_manager. It now checks for tilesummaries, that do not
+                # contain any top tile
+                if(numpy.isnan(list(obj.predictions_raw.values())).any()):
+                    continue
+                y_preds_raw.append(obj.predictions_raw[Class])
+                y_true.append((Class in obj.get_labels()))
+                
+            
+            print(f'{Class}')
+            print(f'y_true: {y_true}')
+            print(f'y_preds_raw: {y_preds_raw}')
+            print('')
+            print('------------------------------------------------------------------------')
+            print('')
+            
+            precision, recall, thresholds = precision_recall_curve(y_true, y_preds_raw, pos_label=1)
+            average_precision = average_precision_score(y_true, y_preds_raw)
+                   
+            pr_display = PrecisionRecallDisplay(precision=precision, 
+                                                recall=recall, 
+                                                average_precision=average_precision, 
+                                                estimator_name=Class).plot()
+            
+            
             
     def plot_probability_histograms(self, 
                                     level:shared.enums.EvaluationLevel, 
