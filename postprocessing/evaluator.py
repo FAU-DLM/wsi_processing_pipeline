@@ -175,12 +175,12 @@ class Evaluator:
                 y_true.append((Class in obj.get_labels()))
                 
             
-            print(f'{Class}')
-            print(f'y_true: {y_true}')
-            print(f'y_preds_raw: {y_preds_raw}')
-            print('')
-            print('------------------------------------------------------------------------')
-            print('')
+            #print(f'{Class}')
+            #print(f'y_true: {y_true}')
+            #print(f'y_preds_raw: {y_preds_raw}')
+            #print('')
+            #print('------------------------------------------------------------------------')
+            #print('')
             
             precision, recall, thresholds = precision_recall_curve(y_true, y_preds_raw, pos_label=1)
             average_precision = average_precision_score(y_true, y_preds_raw)
