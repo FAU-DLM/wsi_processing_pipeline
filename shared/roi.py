@@ -19,8 +19,9 @@ class RegionOfInterest(ABC):
     whole_slide_image:WholeSlideImage = None
     labels:List[int] = None
     __tiles:List[Tile] = None
-    def __init__(self, roi_id:str):
+    def __init__(self, roi_id:str, whole_slide_image:WholeSlideImage = None):
         self.roi_id = roi_id
+        self.whole_slide_image = whole_slide_image
         self.__tiles = []
         
     def is_removed(self):

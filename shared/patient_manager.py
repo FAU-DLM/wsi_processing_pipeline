@@ -271,11 +271,11 @@ class PatientManager:
             # region of interest; just one dummy roi per wsi
             ###
             current_roi = None
-            if(len(current_slide.regions_of_interest) == 0):
+            if(len(current_slide.get_regions_of_interest()) == 0):
                 current_roi = roi.RegionOfInterestDummy(slide_id, current_slide)
                 current_slide.add_region_of_interest(current_roi)
             else:
-                current_roi = current_slide.regions_of_interest[0]
+                current_roi = current_slide.get_regions_of_interest()[0]
             tile = Tile(roi=current_roi, tile_path=tile_path, labels=labels_getter(tile_path))
             current_roi.add_tile(tile)
             
