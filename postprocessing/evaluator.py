@@ -212,7 +212,7 @@ class Evaluator:
                 # and therefore during prediction calculation a division by 0 resulted in NaN values
                 # This is fixed in the latest version of the patient_manager. It now checks for tilesummaries, that do not
                 # contain any top tile
-                if(numpy.isnan(list(y_pred_raw.values())).any()):
+                if(numpy.isnan(list(obj.predictions_raw.values())).any()):
                     continue
                     
                 predicted_prob = obj.predictions_raw[Class]
