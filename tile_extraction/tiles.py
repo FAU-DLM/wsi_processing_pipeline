@@ -263,7 +263,29 @@ class TileSummary:
         return tile.score > self.tile_score_thresh and width >= self.minimal_acceptable_tile_width*self.orig_tile_w and height >= \
                 self.minimal_acceptable_tile_height*self.orig_tile_h
         
-
+    
+    def show_wsi(self, 
+                 figsize:tuple=(10,10), 
+                 axis_off:bool=False):
+        """
+        Displays a scaled down overview image of the wsi.
+        
+        Arguments:
+            figsize: Size of the plotted matplotlib figure containing the image.
+            axis_off: bool value that indicates, if axis shall be plotted with the picture
+        """
+        wsi_pil, large_w, large_h, new_w, new_h, best_level_for_downsample = wsi_to_scaled_pil_image(wsi_filepath=self.wsi_path, 
+                                                                                                               scale_factor=self.scale_factor, 
+                                                                                                               level=0)                                                               
+        # Create figure and axes
+        fig,ax = plt.subplots(1,1,figsize=figsize)    
+        # Display the image
+        ax.imshow(wsi_pil)     
+        if(axis_off):
+            ax.axis('off') 
+        plt.show() 
+    
+    
     def show_wsi_with_top_tiles(self, 
                                    figsize:Tuple[int] = (10,10),
                                    scale_factor:int = 32, 
@@ -298,15 +320,17 @@ class TileSummary:
                                  
     def show_wsi_with_rois(self, 
                            figsize:Tuple[int] = (10,10),
-                           scale_factor:int = 32):
+                           scale_factor:int = 32, 
+                           axis_off:bool = False):
         """    
         Loads a whole slide image, scales it down, converts it into a numpy array and displays it with a grid overlay for all rois
         specified in self.wsi_info.rois
         Arguments:
             figsize: Size of the plotted matplotlib figure containing the image.
-            scale_factor: The larger, the faster this method works, but the plotted image has less resolution.    
+            scale_factor: The larger, the faster this method works, but the plotted image has less resolution.
+            axis_off: bool value that indicates, if axis shall be plotted with the picture
         """
-        util.show_wsi_with_rois(self.wsi_path, self.rois)
+        util.show_wsi_with_rois(self.wsi_path, self.rois, axis_off=axis_off)
 
 
 
