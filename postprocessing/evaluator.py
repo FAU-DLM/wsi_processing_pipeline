@@ -2,6 +2,7 @@ import typing
 from typing import List, Callable, Tuple, Dict, Union
 
 import postprocessing
+from postprocessing.predictor import Predictor
 import shared
 import visualization
 from visualization.gradcam import GradCam
@@ -25,9 +26,9 @@ import PIL
 import cv2
 
 class Evaluator:
-    predictor:postprocessing.predictor.Predictor = None
+    _predictor:postprocessing.predictor.Predictor = None
     def __init__(self, predictor:postprocessing.predictor.Predictor):
-        self.predictor = predictor
+        self._predictor = predictor
             
     def __get_objects_according_to_evaluation_level(self, 
                                                     level:shared.enums.EvaluationLevel, 
@@ -37,11 +38,11 @@ class Evaluator:
                                                                  shared.case.Case]]:
         objs = None
         if(level == shared.enums.EvaluationLevel.tile):
-            objs = self.predictor.patient_manager.get_tiles(dataset_type = dataset_type)
+            objs = self._predictor.patient_manager.get_tiles(dataset_type = dataset_type)
         elif(level == shared.enums.EvaluationLevel.slide):
-            objs = self.predictor.patient_manager.get_wsis(dataset_type=dataset_type)
+            objs = self._predictor.patient_manager.get_wsis(dataset_type=dataset_type)
         elif(level == shared.enums.EvaluationLevel.case):
-            objs = self.predictor.patient_manager.get_cases(dataset_type=dataset_type)
+            objs = self._predictor.patient_manager.get_cases(dataset_type=dataset_type)
         else:
             raise ValueError('Wrong value for level.')
             
@@ -68,7 +69,7 @@ class Evaluator:
         #key:class; value: number of correct predictions
         n_objs = 0
         n_correctly_predicted = {}
-        for Class in self.predictor.get_classes():
+        for Class in self._predictor.get_classes():
             n_correctly_predicted[Class] = 0
             
         for o in tqdm(objs):
@@ -117,12 +118,16 @@ class Evaluator:
     
     def plot_roc_curves(self, 
                         level:shared.enums.EvaluationLevel, 
-                        dataset_type:shared.enums.DatasetType):
+                        dataset_type:shared.enums.DatasetType, 
+                        font_size:int=10):
         """
-        Plots roc curves for each class in self.predictor.get_classes().
+        Plots roc curves for each class in self._predictor.get_classes().
         """
+        #set matplotlib font size globally
+        plt.rcParams['font.size'] = font_size
+        
         objs = self.__get_objects_according_to_evaluation_level(level=level, dataset_type=dataset_type)
-        classes = self.predictor.get_classes()
+        classes = self._predictor.get_classes()
         for Class in tqdm(classes):
             y_preds_raw = [] # list of the predicted percentages
             y_true = [] # list of True and False
@@ -150,17 +155,24 @@ class Evaluator:
             #plt.xlabel('False Positive Rate')
             #plt.show()
             roc_display = RocCurveDisplay(fpr=fpr, tpr=tpr, roc_auc=roc_auc, estimator_name=Class).plot()
-            
+        
+        #set matplotlib font size back to default
+        plt.rcParams['font.size'] = 10    
 
                         
     def plot_precision_recall_curves(self, 
                                         level:shared.enums.EvaluationLevel, 
-                                        dataset_type:shared.enums.DatasetType):
+                                        dataset_type:shared.enums.DatasetType, 
+                                        font_size:int=10):
         """
-        Plots precision-recall curves for each class in self.predictor.get_classes().
+        Plots precision-recall curves for each class in self._predictor.get_classes().
         """
+        
+        #set matplotlib font size globally
+        plt.rcParams['font.size'] = font_size
+        
         objs = self.__get_objects_according_to_evaluation_level(level=level, dataset_type=dataset_type)
-        classes = self.predictor.get_classes()
+        classes = self._predictor.get_classes()
         for Class in tqdm(classes):
             y_preds_raw = [] # list of the predicted percentages
             y_true = [] # list of True and False
@@ -189,17 +201,23 @@ class Evaluator:
                                                 recall=recall, 
                                                 average_precision=average_precision, 
                                                 estimator_name=Class).plot()
-            
+        #set matplotlib font size back to default
+        plt.rcParams['font.size'] = 10      
             
             
     def plot_probability_histograms(self, 
                                     level:shared.enums.EvaluationLevel, 
-                                    dataset_type:shared.enums.DatasetType):
+                                    dataset_type:shared.enums.DatasetType, 
+                                    font_size:int=10):
         """
-        Plots probability histograms for each class in self.predictor.get_classes().
+        Plots probability histograms for each class in self._predictor.get_classes().
         """
+        
+        #set matplotlib font size globally
+        plt.rcParams['font.size'] = font_size
+        
         objs = self.__get_objects_according_to_evaluation_level(level=level, dataset_type=dataset_type)
-        classes = self.predictor.get_classes()
+        classes = self._predictor.get_classes()
         
         for Class in tqdm(classes):
             # predicted probabilities of true positives
@@ -232,7 +250,8 @@ class Evaluator:
             pyplot.ylabel('Frequency')
             pyplot.xlabel('Predicted Probability')
             pyplot.show()
-    
+        #set matplotlib font size back to default
+        plt.rcParams['font.size'] = 10
     
     def __get_y_true_and_y_pred(self, 
                                 level:shared.enums.EvaluationLevel, 
@@ -267,9 +286,14 @@ class Evaluator:
     
     def plot_confusion_matrix(self, 
                               level:shared.enums.EvaluationLevel, 
-                              dataset_type:shared.enums.DatasetType):
+                              dataset_type:shared.enums.DatasetType, 
+                              font_size:int=10):
+        
+        #set matplotlib font size globally
+        plt.rcParams['font.size'] = font_size
+        
         cms = self.confusion_matrix(level=level, dataset_type=dataset_type)
-        vocab = self.predictor.get_classes()
+        vocab = self._predictor.get_classes()
         for n, cm in enumerate(cms):
             fig = plt.figure()
             plt.imshow(cm, interpolation='nearest', cmap='Blues')
@@ -291,6 +315,9 @@ class Evaluator:
                              horizontalalignment="center", 
                              verticalalignment="center", 
                              color="white" if cm[row, col] > thresh else "black")
+                    
+        #set matplotlib font size back to default
+        plt.rcParams['font.size'] = 10
     
     def classification_report(self, 
                               level:shared.enums.EvaluationLevel, 
@@ -305,7 +332,7 @@ class Evaluator:
         """
         Returns the k tiles from the specified dataset with the highest or if descending == False with the lowest loss.
         """
-        tls = self.predictor.patient_manager.get_tiles(dataset_type = dataset_type)
+        tls = self._predictor.patient_manager.get_tiles(dataset_type = dataset_type)
         tls.sort(key=lambda tile: tile.loss, reverse=descending)
         return tls[:k]
     
@@ -359,7 +386,7 @@ class Evaluator:
         ###
         # images
         ###
-        tile_images = [t.get_pil_image() for t in self.predictor.patient_manager.get_all_tiles()[:k]]
+        tile_images = [t.get_pil_image() for t in self._predictor.patient_manager.get_all_tiles()[:k]]
         figures = {}
         for n, img in enumerate(tile_images):
             figures[n] = img
@@ -494,7 +521,7 @@ class Evaluator:
     #                         shared.enums.GradCamResult.targets: if targets are available (tile.get_labels()), grad-cams for the 
     #                                                             classes that are part of the target classes are shown
     #        class_indices: Only relevant if <grad_cam_result> is set to None. You can specify for which classes
-    #                        the grad-cam heatmaps shall be calculated. See self.predictor.get_classes() or 
+    #                        the grad-cam heatmaps shall be calculated. See self._predictor.get_classes() or 
     #                        learner.dls.vocab for the class order.
     #        model_layer: The grad_cam heatmaps can be calculated for every layer of the model's body. By default this 
     #                     library takes the last convolutional layer of the model's body, if no layer is specified.
@@ -506,12 +533,12 @@ class Evaluator:
     #    if(grad_cam_result is None and (class_indices is None or len(class_indices) == 0)):
     #        raise ValueError('You have to specify class indices if grad_cam_result is set to None.')
     #    if(grad_cam_result is None and class_indices is not None):
-    #        if(min(class_indices) < 0 or max(class_indices) >= len(self.predictor.get_classes())):
-    #            raise ValueError('Values of class indices must be in range [0, len(self.predictor.get_classes()))')
+    #        if(min(class_indices) < 0 or max(class_indices) >= len(self._predictor.get_classes())):
+    #            raise ValueError('Values of class indices must be in range [0, len(self._predictor.get_classes()))')
     #    if(thresholds is None):
-    #        thresholds = numpy.repeat(0.5, len(self.predictor.get_classes()))
+    #        thresholds = numpy.repeat(0.5, len(self._predictor.get_classes()))
     #    if(model_layer == None):
-    #        model_layer = self.predictor.learner.model[0][-1]
+    #        model_layer = self._predictor.learner.model[0][-1]
     #        
     #    if(grad_cam_result == shared.enums.GradCamResult.targets and (tile.get_labels() == None or len(tile.get_labels())==0)):
     #       raise ValueError
@@ -531,18 +558,18 @@ class Evaluator:
     #        def __enter__(self, *args): return self
     #        def __exit__(self, *args): self.hook.remove()
     #            
-    #    x, = fastcore.utils.first(self.predictor.learner.dls.test_dl([tile]))
-    #    x_dec = fastai.torch_core.TensorImage(self.predictor.learner.dls.train.decode((x,))[0][0])
+    #    x, = fastcore.utils.first(self._predictor.learner.dls.test_dl([tile]))
+    #    x_dec = fastai.torch_core.TensorImage(self._predictor.learner.dls.train.decode((x,))[0][0])
 #
     #    with HookBwd(model_layer) as hookg:
     #        with Hook(model_layer) as hook:
-    #            output = self.predictor.learner.model.eval()(x.cuda())
+    #            output = self._predictor.learner.model.eval()(x.cuda())
     #            act = hook.stored
     #            
     #            predicted_classes = []
     #            preds_raw = torch.sigmoid(output).cpu()[0].detach().numpy()
     #            preds =  preds_raw >= thresholds
-    #            for n, class_name in enumerate(self.predictor.get_classes()):
+    #            for n, class_name in enumerate(self._predictor.get_classes()):
     #                    if(preds[n]):
     #                        predicted_classes.append(class_name)
     #       
@@ -554,12 +581,12 @@ class Evaluator:
     #                classes_to_show = tile.get_labels()
     #            elif(grad_cam_result == None):
     #                for i in class_indices:
-    #                    classes_to_show.append(self.predictor.get_classes()[i])
+    #                    classes_to_show.append(self._predictor.get_classes()[i])
     #            
     #            else: assert False
     #            
     #            preds_dict = {}
-    #            for class_name, pred in zip(self.predictor.learner.dls.vocab, preds_raw):
+    #            for class_name, pred in zip(self._predictor.learner.dls.vocab, preds_raw):
     #                preds_dict[class_name] = pred.item()
     #            print(f'predicted percentages {preds_dict}')
     #            print(f'predicted classes: {predicted_classes}')
@@ -588,27 +615,27 @@ class Evaluator:
         if(grad_cam_result is None and (class_indices is None or len(class_indices) == 0)):
             raise ValueError('You have to specify class indices if grad_cam_result is set to None.')
         if(grad_cam_result is None and class_indices is not None):
-            if(min(class_indices) < 0 or max(class_indices) >= len(self.predictor.get_classes())):
-                raise ValueError(f'Values of class indices must be in range [0, {len(self.predictor.get_classes())})')
+            if(min(class_indices) < 0 or max(class_indices) >= len(self._predictor.get_classes())):
+                raise ValueError(f'Values of class indices must be in range [0, {len(self._predictor.get_classes())})')
         if(thresholds is None):
-            thresholds = numpy.repeat(0.5, len(self.predictor.get_classes()))
+            thresholds = numpy.repeat(0.5, len(self._predictor.get_classes()))
         if(model_layer == None):
-            model_layer = self.predictor.learner.model[0][-1]           
+            model_layer = self._predictor.learner.model[0][-1]           
         if(grad_cam_result == shared.enums.GradCamResult.targets \
            and (tile.get_labels() == None or len(tile.get_labels())==0)):
             raise ValueError('no labels available for the specified tile')
             
-        self.predictor.learner.model.cpu()
+        self._predictor.learner.model.cpu()
                 
-        x, = fastcore.utils.first(self.predictor.learner.dls.test_dl([tile]))
-        x_dec = fastai.torch_core.TensorImage(self.predictor.learner.dls.train.decode((x,))[0][0])
+        x, = fastcore.utils.first(self._predictor.learner.dls.test_dl([tile]))
+        x_dec = fastai.torch_core.TensorImage(self._predictor.learner.dls.train.decode((x,))[0][0])
 
-        output = self.predictor.learner.model.eval()(x.cpu())
+        output = self._predictor.learner.model.eval()(x.cpu())
                 
         predicted_classes = []
         preds_raw = torch.sigmoid(output).cpu()[0].detach().numpy()
         preds =  preds_raw >= thresholds
-        for n, class_name in enumerate(self.predictor.get_classes()):
+        for n, class_name in enumerate(self._predictor.get_classes()):
             if(preds[n]):
                 predicted_classes.append(class_name)
            
@@ -618,13 +645,13 @@ class Evaluator:
         elif(grad_cam_result == shared.enums.GradCamResult.targets):
             classes_to_show = tile.get_labels()
         elif(grad_cam_result == None):
-            labels = self.predictor.get_classes()
+            labels = self._predictor.get_classes()
             for i in class_indices:
                 classes_to_show.append(labels[i])               
         else: assert False
                 
         preds_dict = {}
-        for class_name, pred in zip(self.predictor.learner.dls.vocab, preds_raw):
+        for class_name, pred in zip(self._predictor.learner.dls.vocab, preds_raw):
             preds_dict[class_name] = pred.item()
         print(f'predicted percentages {preds_dict}')
         print(f'predicted classes: {predicted_classes}')
@@ -652,7 +679,7 @@ class Evaluator:
             thresholds: One threshold for every class to determine predictions from the raw output percentages.
             
             class_indices: Only relevant if <grad_cam_result> is set to None. You can specify for which classes
-                            the grad-cam heatmaps shall be calculated. See self.predictor.get_classes() or 
+                            the grad-cam heatmaps shall be calculated. See self._predictor.get_classes() or 
                             learner.dls.vocab for the class order.
             model_layer: The grad_cam heatmaps can be calculated for every layer of the model's body. By default this 
                          library takes the last convolutional layer of the model's body, if no layer is specified.
@@ -671,8 +698,8 @@ class Evaluator:
                                                         model_layer=model_layer)        
         cam_maps = {}
         
-        grad_cam_extractor = GradCam(model = self.predictor.learner.model, model_layer = model_layer)
-        vocab = list(self.predictor.get_classes())
+        grad_cam_extractor = GradCam(model = self._predictor.learner.model, model_layer = model_layer)
+        vocab = list(self._predictor.get_classes())
         for class_name in classes_to_show:
             cam_map = grad_cam_extractor.generate_cam(input_image = x, class_index = vocab.index(class_name))
             cam_maps[class_name] = cam_map
@@ -718,7 +745,7 @@ class Evaluator:
             thresholds: One threshold for every class to determine predictions from the raw output percentages.
             
             class_indices: Only relevant if <grad_cam_result> is set to None. You can specify for which classes
-                            the grad-cam heatmaps shall be calculated. See self.predictor.get_classes() or 
+                            the grad-cam heatmaps shall be calculated. See self._predictor.get_classes() or 
                             learner.dls.vocab for the class order.
             model_layer: The grad_cam heatmaps can be calculated for every layer of the model's body. By default this 
                          library takes the last convolutional layer of the model's body, if no layer is specified.
@@ -759,7 +786,7 @@ class Evaluator:
                              shared.enums.GradCamResult.targets: if targets are available (tile.get_labels()), grad-cams for the 
                                                                  classes that are part of the target classes are shown
             class_indices: Only relevant if <grad_cam_result> is set to None. You can specify for which classes
-                            the grad-cam heatmaps shall be calculated. See self.predictor.get_classes() or 
+                            the grad-cam heatmaps shall be calculated. See self._predictor.get_classes() or 
                             learner.dls.vocab for the class order.
             model_layer: The grad_cam heatmaps can be calculated for every layer of the model's body. By default this 
                          library takes the last convolutional layer of the model's body, if no layer is specified.
@@ -800,7 +827,7 @@ class Evaluator:
                                                                  grad-cams for the 
                                                                  classes that are part of the target classes are shown
             class_indices: Only relevant if <grad_cam_result> is set to None. You can specify for which classes
-                            the grad-cam heatmaps shall be calculated. See self.predictor.get_classes() or 
+                            the grad-cam heatmaps shall be calculated. See self._predictor.get_classes() or 
                             learner.dls.vocab for the class order.
             model_layer: To calculate the guided grad-cam mask, a grad-cam is calculated. 
                          The grad_cam can be calculated for every layer of the model's body. By default this 
@@ -820,8 +847,8 @@ class Evaluator:
                                                         class_indices=class_indices, 
                                                         model_layer=model_layer)
             
-        GGC = GuidedGradCam(self.predictor.learner.model)
-        vocab = list(self.predictor.get_classes())
+        GGC = GuidedGradCam(self._predictor.learner.model)
+        vocab = list(self._predictor.get_classes())
         
         guided_grad_cam_maps = {}
         for class_name in classes_to_show:
@@ -851,7 +878,7 @@ class Evaluator:
                                                                  grad-cams for the 
                                                                  classes that are part of the target classes are shown
             class_indices: Only relevant if <grad_cam_result> is set to None. You can specify for which classes
-                            the grad-cam heatmaps shall be calculated. See self.predictor.get_classes() or 
+                            the grad-cam heatmaps shall be calculated. See self._predictor.get_classes() or 
                             learner.dls.vocab for the class order.
             model_layer: To calculate the guided grad-cam mask, a grad-cam is calculated. 
                          The grad_cam can be calculated for every layer of the model's body. By default this 
