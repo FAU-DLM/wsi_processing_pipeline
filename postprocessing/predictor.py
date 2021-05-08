@@ -5,6 +5,7 @@ if typing.TYPE_CHECKING:
     from .patient import Patient
 
 
+import torch
 import fastai
 import numpy
 import numpy as np
@@ -59,15 +60,7 @@ class Predictor:
             if(v in labels):
                 ohe_labels[n] = 1
         return ohe_labels
-        
-    def __predict(self, dataloader:fastai.data.core.TfmdDL):
-        return self.learner.get_preds(ds_idx=-1, 
-                                 dl=dataloader, 
-                                 with_input=False, 
-                                 with_decoded=False, 
-                                 reorder=True, 
-                                 with_loss=True)
-    
+            
     def __build_dataloader(self, 
                            pred_type:shared.enums.PredictionType,
                            dataset_type:shared.enums.DatasetType,
@@ -156,7 +149,13 @@ class Predictor:
         preds = self.__predict(dataloader = dl_pred)
         self.__set_preds(predictions=preds, tiles_to_predict=tiles_to_predict, vocab=dl_pred.vocab)
         
-    
+    #def __predict(self, dataloader:fastai.data.core.TfmdDL):
+    #    return self.learner.get_preds(ds_idx=-1, 
+    #                             dl=dataloader, 
+    #                             with_input=False, 
+    #                             with_decoded=False, 
+    #                             reorder=True, 
+    #                             with_loss=True)
     
     def __predict(self, dataset_type:shared.enums.DatasetType, tile):
         tile.labels_one_hot_encoded = self.__one_hot_encode(vocab=self.get_classes(), labels=tile.get_labels())
@@ -167,9 +166,7 @@ class Predictor:
             predictions_raw[Class] = pred_raw            
         tile.predictions_raw = predictions_raw
    
-        # TODO
-        #loss = learner.loss_func(torch.tensor(preds_raw.unsqueeze), torch.tensor(y_true_ohe, dtype=torch.float32).unsqueeze(0))
-        #t.loss = loss    
+        tile.loss = self.learner.loss_func(preds_raw, torch.tensor(tile.labels_one_hot_encoded))  
     
     def predict_on_tiles(self,
                          prediction_type: shared.enums.PredictionType,
