@@ -714,6 +714,10 @@ class GridManager:
                                 axis_off=axis_off)    
         
     def filter_grids(self, minimal_intersection_quotient:float):
+        """
+        Filters out all tiles, which have not a minimum relative intersection 
+        of minimal_intersection_quotient with a roi.
+        """
         for g in self.grids:
             g.filter_grid(roi=self.grid_to_roi[g], 
                           minimal_intersection_quotient=minimal_intersection_quotient)
