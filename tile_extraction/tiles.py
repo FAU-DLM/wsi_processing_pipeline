@@ -40,7 +40,9 @@ import pandas as pd
 import warnings
 from enum import Enum
 import shapely
-
+import copy
+from functools import partial
+import pathos
 
 import util, filter, slide, openslide_overwrite
 from util import *
@@ -49,6 +51,8 @@ from shared import roi
 from shared.tile import Tile
 from shared.roi import *
 from shared.enums import DatasetType, TissueQuantity
+
+
 
 
 TISSUE_HIGH_THRESH = 80
@@ -334,6 +338,446 @@ class TileSummary:
 
 
 
+
+
+class Vertex:
+    def __init__(self, x:float, y:float):
+        self.x = x
+        self.y = y
+    
+    def __repr__(self):
+        return f'(x:{self.x}, y:{self.y})'
+    
+    def __str__(self):
+        return f'(x:{self.x}, y:{self.y})'
+    
+    def __add__(self, o):
+        if(type(o) is np.ndarray and (o.shape == (2,) or o.shape == (2,1))):
+            self.x += o[0]
+            self.y += o[1]
+        else:
+            raise TypeError(f'Vertex class does not support addition with type: {type(o)}')
+
+    def __sub__(self, o):
+        if(type(o) is np.ndarray and (o.shape == (2,) or o.shape == (2,1))):
+            self.x -= o[0]
+            self.y -= o[1]
+        else:
+            raise TypeError(f'Vertex class does not support subtraction with type: {type(o)}')
+           
+    def __mul__(self, o):
+        if(type(o) is int or type(o) is float):
+            self.x *= o
+            self.y *= o
+        else:
+            raise TypeError(f'Vertex class does not support multiplication with type: {type(o)}')
+            
+    def __rmatmul__(self, o):
+        if(type(o) is np.ndarray):
+            return o@np.array([self.x, self.y])
+        else:
+            raise TypeError(f'Vertex class does not support (right sided) matrix multiplication with type: {type(o)}')
+    
+    def __call__(self):
+        return np.array([self.x, self.y])
+        
+    def rotate_around_pivot(self, angle:float, pivot = np.array([0, 0])):
+        """
+        Rotates itself clockwise around the specified pivot with the specified angle.
+        """
+        self.__add__(-pivot)
+        radians = math.radians(angle)
+        rotation_matrix = np.array([[math.cos(radians), -math.sin(radians)], [math.sin(radians), math.cos(radians)]])
+        new_coordinates = rotation_matrix@self.__call__()
+        self.x = new_coordinates[0]
+        self.y = new_coordinates[1]
+        self.__add__(pivot)
+
+        
+class Rectangle:
+    def __init__(self, 
+                 upper_left:Vertex, 
+                 upper_right:Vertex, 
+                 lower_right:Vertex, 
+                 lower_left:Vertex):
+        self.ul = upper_left
+        self.ur = upper_right
+        self.lr = lower_right
+        self.ll = lower_left
+    
+    def __repr__(self):
+        return self.__str__()
+    
+    def __str__(self):
+        return f'(ul: {self.ul}, ur: {self.ur}, lr: {self.lr}, ll: {self.ll})'
+    
+    def __call__(self):
+        return np.array([self.ul(), self.ur(), self.lr(), self.ll()])
+    
+    def __add_to_all_vertices(self, o:np.ndarray):
+        self.ul + o
+        self.ur + o
+        self.lr + o
+        self.ll + o
+    
+    def __rotate_all_vertices(self, angle:float, pivot:np.ndarray):
+        self.ul.rotate_around_pivot(angle=angle, pivot=pivot)
+        self.ur.rotate_around_pivot(angle=angle, pivot=pivot)
+        self.lr.rotate_around_pivot(angle=angle, pivot=pivot)
+        self.ll.rotate_around_pivot(angle=angle, pivot=pivot)
+    
+    def deepcopy(self):
+        ul_dc = copy.deepcopy(self.ul)
+        ur_dc = copy.deepcopy(self.ur)
+        lr_dc = copy.deepcopy(self.lr)
+        ll_dc = copy.deepcopy(self.ll)
+        return Rectangle(ul_dc,ur_dc,lr_dc,ll_dc)
+    
+    def polygon(self):
+        return shapely.geometry.Polygon(np.array([self.ul(), self.ur(), self.lr(), self.ll()]))
+    
+    def rotate_around_itself(self, angle:float):
+        """
+        Rotates itself around its centroid.
+        Arguments:
+            angle: degrees clockwise
+        """
+        centroid = np.array([self.polygon().centroid.x, self.polygon().centroid.y])
+        #rotate all four vertices around this new pivot
+        self.__rotate_all_vertices(angle=angle, pivot=centroid)
+        
+    def rotate_around_pivot_without_orientation_change(self, angle:float, pivot = np.array([0,0])):
+        """
+        Rotates the rectangle's centroid around the specified pivot.
+        The orientations of the edges do not change. 
+        Arguments:
+            angle: degrees clockwise
+        """
+        self.__add_to_all_vertices(-pivot)
+        
+        centroid_old = Vertex(x=self.polygon().centroid.x, y=self.polygon().centroid.y)
+        centroid_new = copy.deepcopy(centroid_old)
+        centroid_new.rotate_around_pivot(angle=angle, pivot=np.array([0,0]))
+        self.__add_to_all_vertices(-centroid_old())
+        self.__add_to_all_vertices(centroid_new())
+        
+        self.__add_to_all_vertices(pivot)
+    
+    def rotate(self, angle:float, pivot = np.array([0,0])):
+        """
+        Combines rotate_around_itself and rotate_around_pivot
+        Arguments:
+            angle: degrees clockwise
+        """
+        self.rotate_around_itself(angle=angle)
+        self.rotate_around_pivot_without_orientation_change(angle=angle, pivot=pivot)
+    
+    def as_roi(self, level = 0)->shared.roi.RegionOfInterestPolygon:
+        """
+        Creates and returns a RegionOfInterestPolygon from its values.
+        Arguments:
+            level: WSI level
+        """
+        return shared.roi.RegionOfInterestPolygon(roi_id=self.__str__(), 
+                                                  vertices=self.__call__(), 
+                                                  level = level)        
+class Grid:
+    def __init__(self, 
+                 min_width:int, 
+                 min_height:int, 
+                 tile_width:int, 
+                 tile_height:int,
+                 coordinate_origin_x:int = 0, 
+                 coordinate_origin_y:int = 0, 
+                 angle:int = 0):
+        ##
+        #init object attributes
+        ##
+        self.min_width = min_width
+        self.min_height = min_height
+        self.tile_width = tile_width
+        self.tile_height = tile_height
+        self.coordinate_origin_x = coordinate_origin_x
+        self.coordinate_origin_y = coordinate_origin_y
+        
+        self.grid_centroid_float = np.array([coordinate_origin_x+min_width/2, coordinate_origin_y+min_height/2])
+        self.grid_centroid_int = np.array([int(coordinate_origin_x+min_width/2), int(coordinate_origin_y+min_height/2)])
+        self.init_angle = angle
+        self.current_angle = 0 #init with 0 and a value != 0 will be set in the rotate method 
+                                #at the end of the constructor 
+        
+        ##
+        #calculate grid of rectangles
+        ##        
+        self.__init_grid(angle=self.init_angle)
+    
+    def __init_grid(self, angle):
+        n_rows = math.ceil(self.min_height/self.tile_height)+1
+        n_columns = math.ceil(self.min_width/self.tile_width)+1
+        
+        # the grid needs to be larger, to still cover the image after rotation
+        wsi_diagonal = math.sqrt(self.min_width**2 + self.min_height**2)
+        n_extra_rows = self.__round_up_to_nearest_even((wsi_diagonal-self.min_height)/self.tile_height)
+        n_extra_columns = self.__round_up_to_nearest_even((wsi_diagonal-self.min_width)/self.tile_width)
+                
+        # init grid with None
+        self.grid = np.zeros(shape=(n_rows+n_extra_rows, n_columns+n_extra_columns), dtype=Rectangle)
+        
+        for c in range(-int(n_extra_columns/2), n_columns + int(n_extra_columns/2)):
+            for r in range(-int(n_extra_rows/2), n_rows + int(n_extra_rows/2)):
+                #upper left vertex
+                ul_x = self.coordinate_origin_x + self.tile_width*c
+                ul_y = self.coordinate_origin_y + self.tile_height*r
+                ul = Vertex(x=ul_x, y=ul_y)
+                #upper right vertex
+                ur_x = self.coordinate_origin_x + self.tile_width*(c+1)
+                ur_y = self.coordinate_origin_y + self.tile_width*r
+                ur = Vertex(x=ur_x, y=ur_y)
+                #lower right vertex
+                lr_x = self.coordinate_origin_x + self.tile_width*(c+1)
+                lr_y = self.coordinate_origin_y + self.tile_width*(r+1)
+                lr = Vertex(x=lr_x, y=lr_y)
+                #lower left vertex
+                ll_x = self.coordinate_origin_x + self.tile_width*c
+                ll_y = self.coordinate_origin_y + self.tile_width*(r+1)
+                ll = Vertex(x=ll_x, y=ll_y)
+                
+                self.grid[r + int(n_extra_rows/2)][c + int(n_extra_columns/2)] = Rectangle(upper_left=ul, 
+                                                                                            upper_right=ur, 
+                                                                                            lower_right=lr, 
+                                                                                            lower_left=ll)       
+        if(angle%360 != 0):
+            self.rotate(angle=angle)
+    
+    
+    def __round_up_to_nearest_even(self, n:float)->int:
+        n = math.ceil(n)
+        if(n%2 == 0):
+            return n
+        else:
+            return n+1
+    
+    def reset_grid(self):
+        self.current_angle = 0
+        self.__init_grid(angle=self.init_angle)
+        
+    def get_rectangles(self)->List[Rectangle]:
+        return [rect for rect in self.grid.flatten() if type(rect) is Rectangle]
+    
+    def get_number_of_tiles(self)->int:
+        def __predicate(elem):
+            if(elem is None):
+                return False
+            return True
+        return np.count_nonzero(np.where(__predicate, self.grid, 1)) 
+    
+    def as_rois(self)->List[shared.roi.RegionOfInterestPolygon]:
+        def __func(rect):
+            if(type(rect) is Rectangle):
+                return rect.as_roi()
+        return [__func(rect) for rect in self.grid.flatten() if type(rect) is Rectangle]
+    
+    def rotate(self, angle:float):
+        """
+        Rotates the grid around the center of the wsi.
+        Arguments:
+            angle: angle in degrees, clockwise
+        """
+        if(angle%360 != 0):
+            def __func(rect):
+                if(type(rect) is Rectangle):
+                    rect.rotate(angle=angle, pivot=self.grid_centroid_float)
+    
+            f = np.vectorize(__func)
+            f(self.grid)
+            #update current angle
+            self.current_angle = (self.current_angle+angle)%360
+        
+    def filter_grid(self, 
+                   roi:shared.roi.RegionOfInterestPolygon, 
+                    minimal_intersection_quotient:float ):
+        """
+        Arguments:
+            roi: a region of interest inside the WSI; it will be checked, if the tiles lay inside of it.
+            minimal_intersection_quotient: in the range of (0.0, 1.0], only tiles with a relative 
+                                           intersection with the roi equal or above this threshold 
+                                           will be kept
+        """
+        if(minimal_intersection_quotient <= 0.0 or minimal_intersection_quotient > 1.0):
+            raise ValueError("minimal_intersection_quotient must be in range (0.0, 1.0]")
+            
+        for row in range(self.grid.shape[0]):
+            for col in range (self.grid.shape[1]):
+                elem = self.grid[row][col]
+                if(type(elem) is Rectangle):
+                    rect_as_roi = elem.as_roi()
+                    intersection_area = roi.polygon.intersection(rect_as_roi.polygon).area
+                    tile_area = rect_as_roi.polygon.area
+                    intersection_quotient = intersection_area/tile_area
+                    #remove tile from grid, if the intersection with the roi is too small
+                    if(intersection_quotient < minimal_intersection_quotient):
+                        self.grid[row][col] = None
+        
+class GridManager:
+    def __init__(self, 
+                 wsi_path:pathlib.Path, 
+                 tile_width:int, 
+                 tile_height:int,
+                 rois:List[shared.roi.RegionOfInterestPolygon], 
+                 grids_per_roi:int = 1):
+        """
+        Arguments:
+            wsi_path:
+            tile_width:
+            tile_height:
+            grids_per_roi: Use multiple grids per roi to enhance the number of tiles.
+                            The grids will be shifted depending on the number of grids 
+                            and the tile_width, tile_height.
+                            e.g.: grids_per_roi == 3 and tile_width == tile_height == 1024
+                                  First grid starts at (0,0).
+                                  Second grid starts at (1024*1/3 , 1024*1/3)
+                                  Third grid starts at (1024*2/3 , 1024*2/3)
+            rois: If no roi is specified, the complete WSI is implicitly considered as one roi.
+        """
+        self.wsi_path = wsi_path
+        self.tile_width = tile_width
+        self.tile_height = tile_height
+        if(len(rois) > 1):
+            rois_dc = [copy.deepcopy(r) for r in rois]
+            shared.roi.merge_overlapping_rois(rois=rois_dc)
+            self.rois = rois_dc
+        else:
+            self.rois = rois
+        self.grids_per_roi = grids_per_roi
+        self.grids = []
+        self.roi_to_grids = {}
+        self.grid_to_roi = {}
+        if(self.rois is None or len(self.rois) == 0):
+            w = slide.open_slide(path=wsi_path)
+            ul = np.array([0,0])
+            ur = np.array([wsi.dimensions[0], 0])
+            lr = np.array([wsi.dimensions[0], wsi.dimensions[1]])
+            ll = np.array([0, wsi.dimensions[1]])
+            vertices = np.array([ul, ur, lr, ll])
+            r = RegionOfInterestPolygon(roi_id=f'{wsi_path.stem} - dummy_roi', vertices=vertices)
+            for i in range(grids_per_roi):
+                shift_origin_x = tile_width*i/grids_per_roi
+                shift_origin_y = tile_height*i/grids_per_roi
+                g = Grid(min_width=wsi.dimensions[0], 
+                         min_height=wsi.dimensions[1], 
+                         tile_width=tile_width, 
+                         tile_height=tile_height, 
+                         coordinate_origin_x=shift_origin_x, 
+                         coordinate_origin_y=shift_origin_y)
+                self.__add_grid(g=g, r=r)
+        else:
+            for r in self.rois:
+                b_ul = Vertex(x=r.polygon.bounds[0], y=r.polygon.bounds[1])
+                b_ur = Vertex(x=r.polygon.bounds[2], y=r.polygon.bounds[1])
+                b_lr = Vertex(x=r.polygon.bounds[2], y=r.polygon.bounds[3])
+                b_ll = Vertex(x=r.polygon.bounds[0], y=r.polygon.bounds[3])
+                b_width = r.polygon.bounds[2] - r.polygon.bounds[0]
+                b_height = r.polygon.bounds[3] - r.polygon.bounds[1]
+                for i in range(grids_per_roi):
+                    shift_origin_x = tile_width*i/grids_per_roi
+                    shift_origin_y = tile_height*i/grids_per_roi
+                    g = Grid(min_width=b_width, 
+                             min_height=b_height, 
+                             tile_width=tile_width, 
+                             tile_height=tile_height, 
+                             angle=0, 
+                             coordinate_origin_x= r.polygon.bounds[0]+shift_origin_x, 
+                             coordinate_origin_y= r.polygon.bounds[1]+shift_origin_y)
+                    self.__add_grid(g=g, r=r)
+    
+    def __add_grid(self, g:Grid, r:RegionOfInterestPolygon):
+        self.grids.append(g)
+        if(r not in self.roi_to_grids.keys()):
+            self.roi_to_grids[r] = []
+        self.roi_to_grids[r].append(g)
+        self.grid_to_roi[g] = r
+    
+    
+    def show_wsi_with_rois_and_grids(self, 
+                                     figsize: Tuple[int] = (10, 10), 
+                                     scale_factor: int = 32, 
+                                     axis_off: bool = False):
+        
+        for i in range(self.grids_per_roi):
+            tiles_as_rois = []
+            for r in self.roi_to_grids.keys():
+                tiles_as_rois += self.roi_to_grids[r][i].as_rois()
+            util.show_wsi_with_rois(wsi_path=self.wsi_path, 
+                                rois=self.rois + tiles_as_rois, 
+                                figsize=figsize, 
+                                scale_factor=scale_factor, 
+                                axis_off=axis_off)    
+        
+    def filter_grids(self, minimal_intersection_quotient:float):
+        for g in self.grids:
+            g.filter_grid(roi=self.grid_to_roi[g], 
+                          minimal_intersection_quotient=minimal_intersection_quotient)
+            
+    def reset_grids(self):
+        for g in self.grids:
+            g.reset_grid()
+        
+    def __iteration(self, g:Grid, stepsize:float, minimal_intersection_quotient:float):
+            best_angle = 0
+            max_num_tls = 0            
+            current_angle = 0
+            while(current_angle <= 90):
+                g.reset_grid()
+                g.rotate(angle=current_angle)
+                g.filter_grid(roi=self.grid_to_roi[g], 
+                            minimal_intersection_quotient=minimal_intersection_quotient)
+                current_number_of_tiles = g.get_number_of_tiles()
+                if(current_number_of_tiles > max_num_tls):
+                    max_num_tls = current_number_of_tiles
+                    best_angle = current_angle
+                current_angle += stepsize    
+                
+            #to not forget a rotation of exactly 90°   
+            if(g.tile_width != g.tile_height and current_angle > 90):
+                g.reset_grid()
+                g.rotate(angle=90)
+                g.filter_grid(roi=self.grid_to_roi[g], 
+                            minimal_intersection_quotient=minimal_intersection_quotient)
+                current_number_of_tiles = g.get_number_of_tiles()
+                if(current_number_of_tiles > max_num_tls):
+                    max_num_tls = current_number_of_tiles
+                    best_angle = current_angle
+                current_angle += stepsize
+                
+            g.reset_grid()
+            g.rotate(best_angle)
+            g.filter_grid(roi=self.grid_to_roi[g], 
+                          minimal_intersection_quotient=minimal_intersection_quotient)
+        
+    def optimize_grid_angles(self, 
+                             stepsize:float = 5, 
+                             minimal_intersection_quotient:float=1, 
+                             num_workers:int = pathos.util.os.cpu_count()):
+        """
+        Trys different angles from 0° - 90° with intervals of the size "stepsize" to find the best angle, to fit
+        in the most tiles.
+        Arguments:
+            stepsize: stepsizes of angles that are evaluated
+            minimal_intersection_quotient: in the range of (0.0, 1.0], only tiles with a relative 
+                                           intersection with the roi equal or above this threshold 
+                                           will be kept 
+        """
+        if(stepsize <= 0.0 or stepsize > 90.0):
+            raise ValueError('stepsize must be in range (0, 90]')
+        if(minimal_intersection_quotient <= 0.0 or minimal_intersection_quotient > 1.0):
+            raise ValueError('minimal_intersection_quotient must be in range (0, 1]')
+        
+        __foo = partial(self.__iteration, 
+                        stepsize=stepsize, 
+                        minimal_intersection_quotient=minimal_intersection_quotient)
+        
+        pool = pathos.pools.ThreadPool(num_workers)
+        pool.map(__foo, self.grids)
         
       
 
