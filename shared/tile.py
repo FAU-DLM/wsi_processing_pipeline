@@ -27,35 +27,22 @@ class Tile:
     __removed = False #Flag that can be set True, to mark it as "deleted" for the patient_manager. use getter and setter method
                       # this flag is not used in the TileSummary class
     
-    tile_summary = None
+    tilesummary = None
     tiles_folder_path = None
     np_scaled_filtered_tile = None
-    tile_num = None
-    r = None # (=row) e.g. the wsi has a height of 1024 pixel and one tile has a height of 256 pixels, r can be in range [1,4] (ends 
-             # included); if rois are specified, it's the row number inside the roi; so tiles from different rois can have the same
-             # r and c value but with respect to different rois
-    c = None # (=column) like r but according to width
+    grid_manager = None
+    #contains spatial information about the tile with respect to the user specified WSI level
+    rectangle:Rectangle = None
+    rectangle_downsampled:Rectangle = None
     
-    r_s = None #(=row_start)pixel value on y-axis of the SCALED down wsi; always with respect to the wsi nevertheless rois are 
-                # specified
-    r_e = None # (=row_end)
-    c_s = None # (=column_start) like r_s but x-axis
-    c_e = None #(=column_end)
-    
-    o_r_s = None #(=original_row_start)pixel value on y-axis of the UNscaled wsi on the specified level; always with respect to the 
-                    # wsi nevertheless rois are specified
-    o_r_e = None #(=original_row_end)
-    o_c_s = None #(=original_column_start)
-    o_c_e = None #(=original_column_end)
-    
-    tissue_percentage = None #tissue percentage
+    tissue_percentage = None 
     color_factor = None
     s_and_v_factor = None
     quantity_factor = None
     score = None
     tile_naming_func = None
     level = None
-    best_level_for_downsample = None
+    level_downsampled = None
     real_scale_factor = None
     roi:RegionOfInterest = None
     tile_path = None
@@ -66,55 +53,38 @@ class Tile:
     loss:float = None
                 
     def __init__(self, 
-                 tile_summary=None, 
-                 tiles_folder_path=None, 
-                 np_scaled_filtered_tile=None, 
-                 tile_num=None, 
-                 r=None, 
-                 c=None, 
-                 r_s=None, 
-                 r_e=None, 
-                 c_s=None, 
-                 c_e=None, 
-                 o_r_s=None, 
-                 o_r_e=None, 
-                 o_c_s=None,
-                 o_c_e=None, 
-                 t_p=None, #tissue_percentage
-                 color_factor=None, 
-                 s_and_v_factor=None, 
-                 quantity_factor=None, 
-                 score=None, 
-                 tile_naming_func=None, 
-                 level=None,
-                 best_level_for_downsample=None,
-                 real_scale_factor=None,
-                 roi:RegionOfInterest=None,
-                 tile_path = None, 
-                 labels:List[int] = None):
+                 tilesummary, 
+                 tiles_folder_path, 
+                 np_scaled_filtered_tile, 
+                 tile_num,
+                 grid_manager:GridManager,
+                 rectangle:Rectangle,
+                 rectangle_downsampled:Rectangle,
+                 t_p, #tissue_percentage
+                 color_factor, 
+                 s_and_v_factor, 
+                 quantity_factor, 
+                 score, 
+                 tile_naming_func, 
+                 level,
+                 level_downsampled,
+                 real_scale_factor,
+                 roi:RegionOfInterest):
         """
         Arguments:
             level: whole-slide image's level, the tile shall be extracted from
-            best_level_for_downsample: openslide.OpenSlide.get_best_level_for_downsample(scale_factor)
-            best_level_for_downsample: openslide.OpenSlide.get_best_level_for_downsample(scale_factor)
+            level_downsampled: openslide.OpenSlide.get_best_level_for_downsample(scale_factor)
         """
 
 
-        self.tile_summary = tile_summary
+        self.tilesummary = tilesummary
         self.roi = roi
         self.tiles_folder_path = tiles_folder_path
         self.np_scaled_filtered_tile = np_scaled_filtered_tile
         self.tile_num = tile_num
-        self.r = r
-        self.c = c
-        self.r_s = r_s
-        self.r_e = r_e
-        self.c_s = c_s
-        self.c_e = c_e
-        self.o_r_s = o_r_s
-        self.o_r_e = o_r_e
-        self.o_c_s = o_c_s
-        self.o_c_e = o_c_e
+        self.grid_manager = grid_manager
+        self.rectangle=rectangle
+        self.rectangle_downsampled=rectangle_downsampled
         self.tissue_percentage = t_p
         self.color_factor = color_factor
         self.s_and_v_factor = s_and_v_factor
@@ -122,10 +92,8 @@ class Tile:
         self.score = score
         self.tile_naming_func = tile_naming_func
         self.level = level
-        self.best_level_for_downsample = best_level_for_downsample
+        self.level_downsampled = level_downsampled
         self.real_scale_factor = real_scale_factor
-        self.tile_path = tile_path
-        self.labels = labels
 
     def __str__(self):
         if(self.tile_path != None):
@@ -133,12 +101,12 @@ class Tile:
         else:
             wsi_name = None
             try:
-                wsi_name = self.tile_summary.wsi_path.name
+                wsi_name = self.tilesummary.wsi_path.name
             except:
                 wsi_name = 'to be set'
                 
-            return f'wsi: {wsi_name}; '+"[Tile #%d, Row #%d, Column #%d, Tissue %4.2f%%, Score %0.4f]" % (
-              self.tile_num, self.r, self.c, self.tissue_percentage, self.score)
+            return f'wsi: {wsi_name}; '+"[Tile #%d, Tissue %4.2f%%, Score %0.4f]" % (
+              self.tile_num, self.tissue_percentage, self.score)
 
     def __repr__(self):
         return "\n" + self.__str__()
@@ -177,22 +145,22 @@ class Tile:
         return util.np_to_pil(self.np_scaled_filtered_tile)
     
     def get_width(self):
-        return self.o_c_e - self.o_c_s
+        return self.rectangle.width()
     
     def get_height(self):
-        return self.o_r_e - self.o_r_s
+        return self.rectangle.height()
     
     def get_x(self):
         """
         upper left x coordinate
         """
-        return self.o_c_s
+        return self.rectangle.ul.x
     
     def get_y(self):
         """
         upper left y coordinate
         """
-        return self.o_r_s
+        return self.rectangle.ul.y
     
     def get_path(self)->pathlib.Path:
         return pathlib.Path(tiles.get_tile_image_path(self))
@@ -204,7 +172,7 @@ class Tile:
         return self.roi.whole_slide_image.case.patient.dataset_type
     
     def get_wsi_path(self)->pathlib.Path:
-        return self.tile_summary.wsi_path
+        return self.tilesummary.wsi_path
     
     def calculate_predictions_ohe(self, thresholds:Dict[str, float])->numpy.ndarray:
         """
@@ -238,12 +206,9 @@ class Tile:
     def get_pil_image(self)->PIL.PngImagePlugin.PngImageFile:
         # tile is saved to disc => just open it
         if(self.tile_path != None and os.path.exists(self.tile_path)):
-            return PIL.Image.open(self.tile_path)
+            return PIL.Image.open(self.get_path())
         # tile needs to be extracted from its corresponding wsi (or preextracted roi)
         else:
-            return tiles.ExtractTileFromWSI(path=self.get_wsi_path(), 
-                                             x=self.get_x(), 
-                                             y=self.get_y(), 
-                                             width=self.get_width(), 
-                                             height=self.get_height(), 
-                                             level=self.level)
+            wh = WsiHandler(self.get_wsi_path())
+            return wh.extract_tile_from_wsi_2(rectangle_tile=self.rectangle, 
+                                              level=self.level)
