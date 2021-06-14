@@ -215,31 +215,30 @@ def merge_overlapping_rois(rois:List[RegionOfInterestPolygon]):
     """
     if(rois is None):
         raise ValueError('rois must not be None')
-    if(len(rois) <=1):
-        raise ValueError('There should be at least 2 rois.')
     for r in rois:
         if(type(r) is not RegionOfInterestPolygon):
-            raise ValueError('')
+            raise ValueError('the rois must be of the type RegionOfInterestPolygon')
     
-    roi_0 = rois[0]
-    intersecting_rois = []
-    for r in rois[1:]:
-        if(roi_0.polygon.intersection(r.polygon).area > 0):
-                intersecting_rois.append(r)
-    if(len(intersecting_rois) == 0):
-        return
-        
-    for r in [roi_0] + intersecting_rois:
-        rois.remove(r)
-        
+    if(len(rois) > 1):
+        roi_0 = rois[0]
+        intersecting_rois = []
+        for r in rois[1:]:
+            if(roi_0.polygon.intersection(r.polygon).area > 0):
+                    intersecting_rois.append(r)
+        if(len(intersecting_rois) == 0):
+            return
             
-    merged_poly = roi_0.polygon
-    merged_roi_id = roi_0.roi_id
-    for r in intersecting_rois:
-        merged_poly = merged_poly.union(r.polygon)
-        merged_roi_id = merged_roi_id + " + " + r.roi_id
-    merged_roi = RegionOfInterestPolygon(roi_id=merged_roi_id, 
-                                         vertices=util.polygon_to_numpy(polygon=merged_poly),
-                                         level=roi_0.level)
-    rois.append(merged_roi)
-    merge_overlapping_rois(rois=rois)
+        for r in [roi_0] + intersecting_rois:
+            rois.remove(r)
+            
+                
+        merged_poly = roi_0.polygon
+        merged_roi_id = roi_0.roi_id
+        for r in intersecting_rois:
+            merged_poly = merged_poly.union(r.polygon)
+            merged_roi_id = merged_roi_id + " + " + r.roi_id
+        merged_roi = RegionOfInterestPolygon(roi_id=merged_roi_id, 
+                                             vertices=util.polygon_to_numpy(polygon=merged_poly),
+                                             level=roi_0.level)
+        rois.append(merged_roi)
+        merge_overlapping_rois(rois=rois)
