@@ -14,7 +14,11 @@
 #
 # ------------------------------------------------------------------------
 
-from __future__ import annotations #https://stackoverflow.com/questions/33837918/type-hints-solve-circular-dependency
+#https://stackoverflow.com/questions/46641078/how-to-avoid-circular-dependency-caused-by-type-hinting-of-pointer-attributes-in
+from __future__ import annotations
+import typing
+if typing.TYPE_CHECKING:
+    from .shared.roi import RegionOfInterestPolygon
 
 import typing
 from typing import Callable, Union, Dict, List, Tuple
@@ -34,8 +38,8 @@ sys.path.append("../")
 import tile_extraction
 #from tile_extraction import tiles
 #from tiles import *
-from shared.roi import *
-from shared.roi import RegionOfInterestPolygon
+#from shared.roi import *
+#from shared.roi import RegionOfInterestPolygon
 import shapely
 from shapely import geometry
 

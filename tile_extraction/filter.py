@@ -30,6 +30,7 @@ import skimage.morphology as sk_morphology
 import skimage.segmentation as sk_segmentation
 
 import util, tiles, slide, openslide_overwrite
+from util import pil_to_np_rgb
 
 
 def filter_img(img_pil:PIL.Image.Image) -> PIL.Image.Image:
