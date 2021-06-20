@@ -1216,7 +1216,7 @@ def WsiToTiles(wsi_path:pathlib.Path,
         tile_np_scaled_down = util.pil_to_np_rgb(tile_pil_scaled_down)
         tile_np_scaled_down_filtered = util.pil_to_np_rgb(tile_pil_scaled_down_filtered)
         t_p = filter.tissue_percent(tile_np_scaled_down_filtered)
-        score, color_factor, s_and_v_factor, quantity_factor =\
+        score, color_factor, s_and_v_factor =\
         score_tile(np_tile=tile_np_scaled_down_filtered, 
                    tissue_percent=t_p, 
                    scoring_function=tile_scoring_function)
@@ -1229,8 +1229,7 @@ def WsiToTiles(wsi_path:pathlib.Path,
                          rectangle_downsampled = rect_tile_downsampled,
                          t_p=t_p,
                          color_factor=color_factor, 
-                         s_and_v_factor=s_and_v_factor, 
-                         quantity_factor=quantity_factor, 
+                         s_and_v_factor=s_and_v_factor,  
                          score=score, 
                          tile_naming_func=tile_naming_func, 
                          level=level, 
@@ -1488,8 +1487,8 @@ def score_tile(np_tile, tissue_percent, scoring_function):
     """
     color_factor = hsv_purple_pink_factor(np_tile)
     s_and_v_factor = hsv_saturation_and_value_factor(np_tile)
-    amount = tissue_quantity(tissue_percent)
-    quantity_factor = tissue_quantity_factor(amount)
+    #amount = tissue_quantity(tissue_percent)
+    #quantity_factor = tissue_quantity_factor(amount)
     combined_factor = color_factor * s_and_v_factor   
     score = scoring_function(tissue_percent, combined_factor)
     
@@ -1502,7 +1501,7 @@ def score_tile(np_tile, tissue_percent, scoring_function):
     #if combined_factor != 0.0 or tissue_percent != 0.0:
       #  print(f'after: {score}') 
                   
-    return score, color_factor, s_and_v_factor, quantity_factor
+    return score, color_factor, s_and_v_factor #, quantity_factor
 
 def tissue_quantity_factor(amount):
   """

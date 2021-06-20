@@ -38,7 +38,6 @@ class Tile:
     tissue_percentage = None 
     color_factor = None
     s_and_v_factor = None
-    quantity_factor = None
     score = None
     tile_naming_func = None
     level = None
@@ -62,8 +61,7 @@ class Tile:
                  rectangle_downsampled:Rectangle,
                  t_p, #tissue_percentage
                  color_factor, 
-                 s_and_v_factor, 
-                 quantity_factor, 
+                 s_and_v_factor,  
                  score, 
                  tile_naming_func, 
                  level,
@@ -88,7 +86,6 @@ class Tile:
         self.tissue_percentage = t_p
         self.color_factor = color_factor
         self.s_and_v_factor = s_and_v_factor
-        self.quantity_factor = quantity_factor
         self.score = score
         self.tile_naming_func = tile_naming_func
         self.level = level
