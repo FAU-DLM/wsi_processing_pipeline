@@ -13,6 +13,9 @@
 # limitations under the License.
 #
 # ------------------------------------------------------------------------
+
+from __future__ import annotations #https://stackoverflow.com/questions/33837918/type-hints-solve-circular-dependency
+
 import typing
 from typing import Callable, Union, Dict, List, Tuple
 import pathlib
@@ -29,10 +32,12 @@ import fastai
 import sys
 sys.path.append("../")
 import tile_extraction
-from tile_extraction import tiles
-from tiles import *
+#from tile_extraction import tiles
+#from tiles import *
 from shared.roi import *
+from shared.roi import RegionOfInterestPolygon
 import shapely
+from shapely import geometry
 
 # If True, display additional NumPy array stats (min, max, mean, is_binary).
 ADDITIONAL_NP_STATS = False
