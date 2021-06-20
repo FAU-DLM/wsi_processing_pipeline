@@ -14,6 +14,14 @@
 #
 # ------------------------------------------------------------------------
 
+
+#https://stackoverflow.com/questions/46641078/how-to-avoid-circular-dependency-caused-by-type-hinting-of-pointer-attributes-in
+from __future__ import annotations
+import typing
+if typing.TYPE_CHECKING:
+    from .shared.tile import Tile
+
+
 # To get around renderer issue on macOS going from Matplotlib image to NumPy image.
 import matplotlib
 
@@ -44,11 +52,13 @@ import copy
 from functools import partial
 import pathos
 
+
+
 import util, filter, slide, openslide_overwrite
-from util import *
+from util import adjust_level
 import shared
 from shared import roi
-from shared.tile import Tile
+#from shared.tile import Tile ## see future import
 from shared.roi import *
 from shared.enums import DatasetType, TissueQuantity
 
@@ -89,10 +99,10 @@ class Vertex:
             
         return self
 
-    def __sub__(self, o)->Vertex:
+    def __sub__(self, o):
         return self.__add__(copy.deepcopy(o)*(-1))
                   
-    def __mul__(self, o)->Vertex:
+    def __mul__(self, o):
         if(type(o) is int or type(o) is float):
             self.x *= o
             self.y *= o
@@ -101,7 +111,7 @@ class Vertex:
             
         return self
             
-    def __rmatmul__(self, o)->Vertex:
+    def __rmatmul__(self, o):
         if(type(o) is np.ndarray):
             return o@np.array([self.x, self.y])
         else:
@@ -113,7 +123,7 @@ class Vertex:
     def __call__(self):
         return np.array([self.x, self.y])
         
-    def rotate_around_pivot(self, angle:float, pivot = np.array([0, 0]))->Vertex:
+    def rotate_around_pivot(self, angle:float, pivot = np.array([0, 0])):
         """
         Rotates itself clockwise around the specified pivot with the specified angle.
         """
@@ -128,10 +138,10 @@ class Vertex:
         
         return self
     
-    def deepcopy(self)->Vertex:
+    def deepcopy(self):
         return Vertex(x=self.x, y=self.y)
     
-    def change_level(self, current_level:int, new_level:int)->Vertex:
+    def change_level(self, current_level:int, new_level:int):
         """
         Arguments:
         
@@ -161,31 +171,31 @@ class Rectangle:
     def __call__(self):
         return np.array([self.ul(), self.ur(), self.lr(), self.ll()])
     
-    def __add__(self, o:Union[np.ndarray, Vertex])->Rectangle:
+    def __add__(self, o:Union[np.ndarray, Vertex]):
         self.ul + o
         self.ur + o
         self.lr + o
         self.ll + o
         return self
         
-    def __sub__(self, o:Union[np.ndarray, Vertex])->Rectangle:
+    def __sub__(self, o:Union[np.ndarray, Vertex]):
         return self.__add__(copy.deepcopy(o)*(-1))
         
-    def __mul__(self, o:int)->Rectangle:
+    def __mul__(self, o:int):
         self.ul * o
         self.ur * o
         self.lr * o
         self.ll * o
         return self
     
-    def __rotate_all_vertices(self, angle:float, pivot:np.ndarray)->Rectangle:
+    def __rotate_all_vertices(self, angle:float, pivot:np.ndarray):
         self.ul.rotate_around_pivot(angle=angle, pivot=pivot)
         self.ur.rotate_around_pivot(angle=angle, pivot=pivot)
         self.lr.rotate_around_pivot(angle=angle, pivot=pivot)
         self.ll.rotate_around_pivot(angle=angle, pivot=pivot)
         return self
     
-    def deepcopy(self)->Rectangle:
+    def deepcopy(self):
         ul_dc = copy.deepcopy(self.ul)
         ur_dc = copy.deepcopy(self.ur)
         lr_dc = copy.deepcopy(self.lr)
@@ -195,7 +205,7 @@ class Rectangle:
     def polygon(self)->shapely.geometry.Polygon:
         return shapely.geometry.Polygon(np.array([self.ul(), self.ur(), self.lr(), self.ll()]))
     
-    def rotate_around_itself(self, angle:float)->Rectangle:
+    def rotate_around_itself(self, angle:float):
         """
         Rotates itself around its centroid.
         Arguments:
@@ -208,7 +218,7 @@ class Rectangle:
         
     def rotate_around_pivot_without_orientation_change(self, 
                                                        angle:float, 
-                                                       pivot = np.array([0,0]))->Rectangle:
+                                                       pivot = np.array([0,0])):
         """
         Rotates the rectangle's centroid around the specified pivot.
         The orientations of the edges do not change. 
@@ -226,7 +236,7 @@ class Rectangle:
         self.__add__(pivot)
         return self
     
-    def rotate(self, angle:float, pivot = np.array([0,0]))->Rectangle:
+    def rotate(self, angle:float, pivot = np.array([0,0])):
         """
         Combines rotate_around_itself and rotate_around_pivot
         Arguments:
@@ -253,7 +263,7 @@ class Rectangle:
         ll = (self.ll.x, self.ll.y)
         return shapely.geometry.Polygon(shell=[ul, ur, lr, ll])
     
-    def get_outer_bounds(self)->Rectangle:
+    def get_outer_bounds(self):
         """
         returns a new Rectangle which contains this Rectangle but its edges are parallel to the 
         WSI. So if this Rectangle is not rotated, the new Rectangle will have the same
@@ -290,7 +300,7 @@ class Rectangle:
         else:
             return self.ll.y - self.ul.y
         
-    def change_level(self, current_level:int, new_level:int)->Rectangle:
+    def change_level(self, current_level:int, new_level:int):
         """
         Arguments:
         
@@ -508,8 +518,8 @@ class GridManager:
             for i in range(grids_per_roi):
                 shift_origin_x = tile_width*i/grids_per_roi
                 shift_origin_y = tile_height*i/grids_per_roi
-                g = Grid(min_width=wsi.level_dimensions[level][0], 
-                         min_height=wsi.dimensions[1], 
+                g = Grid(min_width=w.level_dimensions[level][0], 
+                         min_height=w.dimensions[1], 
                          tile_width=tile_width, 
                          tile_height=tile_height,
                          level=level,
@@ -1191,8 +1201,8 @@ def WsiToTiles(wsi_path:pathlib.Path,
                              level=level,
                              best_level_for_downsample=best_level_for_downsample,
                              real_scale_factor=real_scale_factor,
-                             rois=gm.rois, 
-                             grid_manager=gm) #rois in gm are deepcopied and overlapping rois are merged  
+                             rois=gm.rois, #rois in gm are deepcopied and overlapping rois are merged 
+                             grid_manager=gm)  
     
     wh = WsiHandler(wsi_path=wsi_path)
     
