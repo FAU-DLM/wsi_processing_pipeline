@@ -36,6 +36,7 @@ import fastai
 import sys
 sys.path.append("../")
 import tile_extraction
+import tiles
 #from tile_extraction import tiles
 #from tiles import *
 #from shared.roi import *

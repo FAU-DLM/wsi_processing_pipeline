@@ -61,6 +61,7 @@ from shared import roi
 #from shared.tile import Tile ## see future import
 from shared.roi import *
 from shared.enums import DatasetType, TissueQuantity
+from shared.tile import Tile
 
 
 
