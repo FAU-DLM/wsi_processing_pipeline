@@ -4,6 +4,7 @@ from typing import List, Tuple, Union, Sequence
 from shared.wsi import WholeSlideImage
 from shared.case import Case
 from tile_extraction import util
+from util import polygon_to_numpy
 import copy
 import shapely
 from shapely.geometry import Polygon, Point
@@ -94,7 +95,7 @@ class RegionOfInterestPolygon(RegionOfInterest):
         Returns a numpy array with shape [number_of_vertices, 2] where the second dimension represents x,y-coordinates of
         each vertex
         """       
-        return util.polygon_to_numpy(self.polygon)
+        return polygon_to_numpy(self.polygon)
        
     def change_level_in_place(self, new_level:int)->RegionOfInterestPolygon:
         """
@@ -215,9 +216,11 @@ def merge_overlapping_rois(rois:List[RegionOfInterestPolygon]):
     """
     if(rois is None):
         raise ValueError('rois must not be None')
-    for r in rois:
-        if(type(r) is not RegionOfInterestPolygon):
-            raise ValueError('the rois must be of the type RegionOfInterestPolygon')
+    #for r in rois:
+    #    if(type(r) is not RegionOfInterestPolygon
+    #       or type(r) is not type(wsi_processing_pipeline.shared.roi.RegionOfInterestPolygon)):
+    #        print(type(r))
+    #        raise ValueError('the rois must be of the type RegionOfInterestPolygon')
     
     if(len(rois) > 1):
         roi_0 = rois[0]
@@ -238,7 +241,7 @@ def merge_overlapping_rois(rois:List[RegionOfInterestPolygon]):
             merged_poly = merged_poly.union(r.polygon)
             merged_roi_id = merged_roi_id + " + " + r.roi_id
         merged_roi = RegionOfInterestPolygon(roi_id=merged_roi_id, 
-                                             vertices=util.polygon_to_numpy(polygon=merged_poly),
+                                             vertices=polygon_to_numpy(polygon=merged_poly),
                                              level=roi_0.level)
         rois.append(merged_roi)
         merge_overlapping_rois(rois=rois)

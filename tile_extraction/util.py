@@ -20,6 +20,7 @@ import typing
 if typing.TYPE_CHECKING:
     from .shared.roi import RegionOfInterestPolygon
 
+
 import typing
 from typing import Callable, Union, Dict, List, Tuple
 import pathlib
@@ -36,8 +37,7 @@ import fastai
 import sys
 sys.path.append("../")
 import tile_extraction
-import tiles
-#from tile_extraction import tiles
+from tile_extraction import tiles
 #from tiles import *
 #from shared.roi import *
 #from shared.roi import RegionOfInterestPolygon

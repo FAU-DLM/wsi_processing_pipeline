@@ -11,9 +11,6 @@ from pathlib import Path
 Path.ls = lambda x: [p for p in list(x.iterdir()) if '.ipynb_checkpoints' not in p.name]
 
 from enum import Enum
-import tile_extraction
-from tile_extraction import tiles
-from tiles import *
 import numpy
 import numpy as np
 
@@ -209,3 +206,9 @@ class Tile:
             wh = WsiHandler(self.get_wsi_path())
             return wh.extract_tile_from_wsi_2(rectangle_tile=self.rectangle, 
                                               level=self.level)
+        
+        
+###################################### more imports ################################################################
+import tile_extraction
+from tile_extraction import tiles
+from tiles import *

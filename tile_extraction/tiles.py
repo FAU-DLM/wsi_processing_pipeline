@@ -53,15 +53,16 @@ from functools import partial
 import pathos
 
 
-
-import util, filter, slide, openslide_overwrite
-from util import adjust_level
+import tile_extraction
+from tile_extraction import util
+from util import adjust_level, safe_dict_access, pil_to_np_rgb, show_wsi_with_rois
+import filter, slide, openslide_overwrite
 import shared
 from shared import roi
 #from shared.tile import Tile ## see future import
 from shared.roi import *
 from shared.enums import DatasetType, TissueQuantity
-from shared.tile import Tile
+
 
 
 
@@ -148,8 +149,8 @@ class Vertex:
         
         Return:
         """
-        self.x = util.adjust_level(value_to_adjust=self.x, from_level=current_level, to_level=new_level)
-        self.y = util.adjust_level(value_to_adjust=self.y, from_level=current_level, to_level=new_level)
+        self.x = adjust_level(value_to_adjust=self.x, from_level=current_level, to_level=new_level)
+        self.y = adjust_level(value_to_adjust=self.y, from_level=current_level, to_level=new_level)
         return self
 
 class Rectangle:
@@ -565,7 +566,7 @@ class GridManager:
             tiles_as_rois = []
             for r in self.roi_to_grids.keys():
                 tiles_as_rois += self.roi_to_grids[r][i].as_rois()
-            util.show_wsi_with_rois(wsi_path=self.wsi_path, 
+            show_wsi_with_rois(wsi_path=self.wsi_path, 
                                 rois=self.rois + tiles_as_rois, 
                                 figsize=figsize, 
                                 scale_factor=scale_factor, 
@@ -706,8 +707,8 @@ class WsiHandler:
         wsi_height = s.level_dimensions[level][1]
         
         #read_region() expects the coordinates of the upper left pixel with respect to level 0
-        ul_x_level_0 = util.adjust_level(value_to_adjust=ul_x, from_level=level, to_level=0)
-        ul_y_level_0 = util.adjust_level(value_to_adjust=ul_y, from_level=level, to_level=0)
+        ul_x_level_0 = adjust_level(value_to_adjust=ul_x, from_level=level, to_level=0)
+        ul_y_level_0 = adjust_level(value_to_adjust=ul_y, from_level=level, to_level=0)
         
         ul_x_level_0 = int(ul_x_level_0)
         ul_y_level_0 = int(ul_y_level_0)
@@ -990,7 +991,7 @@ class TileSummary:
             but the plotted image has less resolution.
             axis_off: bool value that indicates, if axis shall be plotted with the picture
         """
-        util.show_wsi_with_rois(self.wsi_path, self.rois, axis_off=axis_off)
+        show_wsi_with_rois(self.wsi_path, self.rois, axis_off=axis_off)
         
         
 ############################# functions #########################################
@@ -1184,8 +1185,8 @@ def WsiToTiles(wsi_path:pathlib.Path,
         gm.filter_grids(minimal_intersection_quotient=minimal_tile_roi_intersection_ratio)
         
     real_scale_factor = int(math.pow(2,best_level_for_downsample-level))
-    tile_height_scaled = util.adjust_level(tile_height, level, best_level_for_downsample)
-    tile_width_scaled = util.adjust_level(tile_width, level, best_level_for_downsample)
+    tile_height_scaled = adjust_level(tile_height, level, best_level_for_downsample)
+    tile_width_scaled = adjust_level(tile_width, level, best_level_for_downsample)
     
     tilesummary = TileSummary(wsi_path=wsi_path,
                            tiles_folder_path=tiles_folder_path,
@@ -1214,8 +1215,8 @@ def WsiToTiles(wsi_path:pathlib.Path,
         tile_pil_scaled_down = wh.extract_tile_from_wsi_2(rectangle_tile=rect_tile_downsampled, 
                                                           level=best_level_for_downsample)
         tile_pil_scaled_down_filtered = filter.filter_img(tile_pil_scaled_down)
-        tile_np_scaled_down = util.pil_to_np_rgb(tile_pil_scaled_down)
-        tile_np_scaled_down_filtered = util.pil_to_np_rgb(tile_pil_scaled_down_filtered)
+        tile_np_scaled_down = pil_to_np_rgb(tile_pil_scaled_down)
+        tile_np_scaled_down_filtered = pil_to_np_rgb(tile_pil_scaled_down_filtered)
         t_p = filter.tissue_percent(tile_np_scaled_down_filtered)
         score, color_factor, s_and_v_factor =\
         score_tile(np_tile=tile_np_scaled_down_filtered, 
@@ -1348,7 +1349,7 @@ def WsisToTilesParallel(wsi_paths:List[pathlib.Path],
                                    "level":level, 
                                    "save_tiles":save_tiles,
                                    "tiles_folder_path":tiles_folder_path,
-                                   "rois":util.safe_dict_access(wsi_path_to_rois, p),
+                                   "rois": util.safe_dict_access(wsi_path_to_rois, p),
                                    "minimal_tile_roi_intersection_ratio":minimal_tile_roi_intersection_ratio,
                                    "verbose":verbose}, 
                                    callback=update, 
@@ -1418,7 +1419,7 @@ def tile_to_np_tile(tile):
     Tile as a NumPy image.
   """
   pil_img = tile_to_pil_tile(tile)
-  np_img = util.pil_to_np_rgb(pil_img)
+  np_img = pil_to_np_rgb(pil_img)
   return np_img
 
 
@@ -1706,3 +1707,8 @@ def hsv_purple_vs_pink_average_factor(rgb, tissue_percentage):
     factor *= .8
 
   return factor
+
+
+###################################### more imports ################################################################
+
+from shared.tile import Tile
