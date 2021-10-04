@@ -1476,7 +1476,7 @@ def save_display_tile(tile, save, display):
 
 def score_tile(np_tile, tissue_percent, scoring_function):
     """
-    Score tile based on tissue percentage, color factor, saturation/value factor, and tissue quantity factor.
+    Score tile based on tissue percentage, color factor, saturation/value factor.
     
     Args:
     np_tile: Tile as NumPy array.
@@ -1485,7 +1485,7 @@ def score_tile(np_tile, tissue_percent, scoring_function):
     row: Tile row.
     col: Tile column.
     
-    Returns tuple consisting of score, color factor, saturation/value factor, and tissue quantity factor.
+    Returns tuple consisting of score, color factor, saturation/value factor
     """
     color_factor = hsv_purple_pink_factor(np_tile)
     s_and_v_factor = hsv_saturation_and_value_factor(np_tile)
