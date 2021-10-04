@@ -26,16 +26,12 @@ class Tile:
     
     tilesummary = None
     tiles_folder_path = None
-    np_scaled_filtered_tile = None
     grid_manager = None
     #contains spatial information about the tile with respect to the user specified WSI level
     rectangle:Rectangle = None
     rectangle_downsampled:Rectangle = None
-    
-    tissue_percentage = None 
-    color_factor = None
-    s_and_v_factor = None
     score = None
+    dict_with_all_parameters_to_determine_score = None
     tile_naming_func = None
     level = None
     level_downsampled = None
@@ -51,15 +47,12 @@ class Tile:
     def __init__(self, 
                  tilesummary, 
                  tiles_folder_path, 
-                 np_scaled_filtered_tile, 
                  tile_num,
                  grid_manager:GridManager,
                  rectangle:Rectangle,
                  rectangle_downsampled:Rectangle,
-                 t_p, #tissue_percentage
-                 color_factor, 
-                 s_and_v_factor,  
-                 score, 
+                 score,
+                 dict_with_all_parameters_to_determine_score,
                  tile_naming_func, 
                  level,
                  level_downsampled,
@@ -69,21 +62,22 @@ class Tile:
         Arguments:
             level: whole-slide image's level, the tile shall be extracted from
             level_downsampled: openslide.OpenSlide.get_best_level_for_downsample(scale_factor)
+            dict_with_all_parameters_to_determine_score: A dictionary which contains all factors 
+                                                         that were relevant for determining the score
+                                                         inside of the tile_scoring_function. This dict is 
+                                                         returned by the tile_scoring_function.
         """
 
 
         self.tilesummary = tilesummary
         self.roi = roi
         self.tiles_folder_path = tiles_folder_path
-        self.np_scaled_filtered_tile = np_scaled_filtered_tile
         self.tile_num = tile_num
         self.grid_manager = grid_manager
         self.rectangle=rectangle
         self.rectangle_downsampled=rectangle_downsampled
-        self.tissue_percentage = t_p
-        self.color_factor = color_factor
-        self.s_and_v_factor = s_and_v_factor
         self.score = score
+        self.dict_with_all_parameters_to_determine_score = dict_with_all_parameters_to_determine_score
         self.tile_naming_func = tile_naming_func
         self.level = level
         self.level_downsampled = level_downsampled
@@ -99,8 +93,7 @@ class Tile:
             except:
                 wsi_name = 'to be set'
                 
-            return f'wsi: {wsi_name}; '+"[Tile #%d, Tissue %4.2f%%, Score %0.4f]" % (
-              self.tile_num, self.tissue_percentage, self.score)
+            return f'wsi: {wsi_name}; '+"[Tile #%d, Score %0.4f]" % (self.tile_num, self.score)
 
     def __repr__(self):
         return "\n" + self.__str__()
@@ -109,13 +102,7 @@ class Tile:
         return self.__removed
     
     def set_removed_flag(self, value:bool):
-        self.__removed = value
-            
-    def mask_percentage(self):
-        return 100 - self.tissue_percentage
-
-    def tissue_quantity(self):
-        return tiles.tissue_quantity(self.tissue_percentage)
+        self.__removed = value        
 
     def get_pil_tile(self):
         return tiles.tile_to_pil_tile(self)
@@ -131,12 +118,6 @@ class Tile:
 
     def display_with_histograms(self):
         tiles.display_tile(self, rgb_histograms=True, hsv_histograms=True)
-
-    def get_np_scaled_filtered_tile(self):
-        return self.np_scaled_filtered_tile
-
-    def get_pil_scaled_filtered_tile(self):
-        return util.np_to_pil(self.np_scaled_filtered_tile)
     
     def get_width(self):
         return self.rectangle.width()
