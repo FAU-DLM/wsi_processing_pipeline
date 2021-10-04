@@ -141,7 +141,7 @@ def show_np_img_with_polygons(img:numpy.ndarray,
 
 
 def show_np(np):
-    return util.np_to_pil(np)
+    return np_to_pil(np)
 
 def show_multiple_images(paths:list, rows = 3, figsize=(128, 64)):
     """
