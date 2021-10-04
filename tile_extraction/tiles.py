@@ -999,6 +999,31 @@ class TileSummary:
 ###
 # some example/default implementations for functions that other methods below take as arguments
 ###
+
+def score_tile_1(tile_pil:PIL.Image.Image)->Tuple[float, Dict]:
+    """
+    Arguments:
+        tile_pil: The tile as a PIL Image
+    Return:
+        The tile's score and a dictionary with all factors that were calculated from the PIL Image and 
+        used for calculating the score.
+    """
+    tile_pil_filtered = filter.filter_img(tile_pil)
+    tile_np = pil_to_np_rgb(tile_pil)
+    tile_np_filtered = pil_to_np_rgb(tile_pil_filtered)
+    tissue_percentage = filter.tissue_percent(tile_np_filtered)
+    
+    color_factor = hsv_purple_pink_factor(tile_np)
+    s_and_v_factor = hsv_saturation_and_value_factor(tile_np)
+    
+    combined_factor = color_factor * s_and_v_factor   
+    score = scoring_function_1(tissue_percentage, combined_factor)
+                    
+    # scale score to between 0 and 1
+    score = 1.0 - (10.0 / (10.0 + score))
+                  
+    return score, {"color_factor":color_factor, "s_and_v_factor":s_and_v_factor}
+
 def scoring_function_1(tissue_percent, combined_factor):
     """
     use this, if you want tissue with lots of cells (lots of hematoxylin stained tissue)
@@ -1099,7 +1124,7 @@ def WsiToTiles(wsi_path:pathlib.Path,
                tile_width:int,
                tile_naming_func:Callable = tile_naming_function_default,
                tile_score_thresh:float = 0.55,
-               tile_scoring_function = scoring_function_1,
+               tile_scoring_function = score_tile_1,
                optimize_grid_angles:bool = False,
                angle_stepsize:float = 5,
                level = 0, 
@@ -1210,29 +1235,21 @@ def WsiToTiles(wsi_path:pathlib.Path,
     
     for n, r in enumerate(gm.get_all_rectangles()):
         rect_tile_downsampled = r.deepcopy().change_level(current_level=level, 
-                                                     new_level=best_level_for_downsample)
-        
+                                                     new_level=best_level_for_downsample)       
         tile_pil_scaled_down = wh.extract_tile_from_wsi_2(rectangle_tile=rect_tile_downsampled, 
                                                           level=best_level_for_downsample)
-        tile_pil_scaled_down_filtered = filter.filter_img(tile_pil_scaled_down)
-        tile_np_scaled_down = pil_to_np_rgb(tile_pil_scaled_down)
-        tile_np_scaled_down_filtered = pil_to_np_rgb(tile_pil_scaled_down_filtered)
-        t_p = filter.tissue_percent(tile_np_scaled_down_filtered)
-        score, color_factor, s_and_v_factor =\
-        score_tile(np_tile=tile_np_scaled_down_filtered, 
-                   tissue_percent=t_p, 
-                   scoring_function=tile_scoring_function)
         
+        #factors_dict is a dictionary which contains all factors 
+        #that were relevant for determining the score
+        #inside of the tile_scoring_function
+        score, factors_dict = tile_scoring_function(tile_pil=tile_pil_scaled_down)      
         tile = Tile(tilesummary=tilesummary,
-                    np_scaled_filtered_tile=tile_np_scaled_down_filtered,
                          tiles_folder_path=tiles_folder_path, 
                          tile_num = n, 
                          rectangle = r,
-                         rectangle_downsampled = rect_tile_downsampled,
-                         t_p=t_p,
-                         color_factor=color_factor, 
-                         s_and_v_factor=s_and_v_factor,  
-                         score=score, 
+                         rectangle_downsampled = rect_tile_downsampled, 
+                         score=score,
+                         dict_with_all_parameters_to_determine_score=factors_dict,
                          tile_naming_func=tile_naming_func, 
                          level=level, 
                          level_downsampled=best_level_for_downsample, 
@@ -1278,7 +1295,7 @@ def WsisToTilesParallel(wsi_paths:List[pathlib.Path],
                              tile_width:int,
                              tile_naming_func:Callable = tile_naming_function_default,
                              tile_score_thresh:float = 0.55,
-                             tile_scoring_function = scoring_function_1,  
+                             tile_scoring_function = score_tile_1,  
                              level = 0, 
                              save_tiles:bool = False,
                              tiles_folder_path:pathlib.Path=None,
@@ -1472,38 +1489,6 @@ def save_display_tile(tile, save, display):
   if display:
     tile_pil_img.show()
 
-
-
-def score_tile(np_tile, tissue_percent, scoring_function):
-    """
-    Score tile based on tissue percentage, color factor, saturation/value factor.
-    
-    Args:
-    np_tile: Tile as NumPy array.
-    tissue_percent: The percentage of the tile judged to be tissue.
-    slide_num: Slide number.
-    row: Tile row.
-    col: Tile column.
-    
-    Returns tuple consisting of score, color factor, saturation/value factor
-    """
-    color_factor = hsv_purple_pink_factor(np_tile)
-    s_and_v_factor = hsv_saturation_and_value_factor(np_tile)
-    #amount = tissue_quantity(tissue_percent)
-    #quantity_factor = tissue_quantity_factor(amount)
-    combined_factor = color_factor * s_and_v_factor   
-    score = scoring_function(tissue_percent, combined_factor)
-    
-    #if combined_factor != 0.0 or tissue_percent != 0.0:
-     #   print(f'before: {score}')            
-                
-    # scale score to between 0 and 1
-    score = 1.0 - (10.0 / (10.0 + score))
-    
-    #if combined_factor != 0.0 or tissue_percent != 0.0:
-      #  print(f'after: {score}') 
-                  
-    return score, color_factor, s_and_v_factor #, quantity_factor
 
 def tissue_quantity_factor(amount):
   """
