@@ -598,7 +598,7 @@ class PatientManager:
 
 ############################################# downsampling and reduce methods ######################################################   
     
-    def downsample(self, 
+    def undersample(self, 
                    level:shared.enums.EvaluationLevel = shared.enums.EvaluationLevel.tile, 
                    dataset_type:shared.enums.DatasetType = shared.enums.DatasetType.train, 
                    delta:float=0.03, 
