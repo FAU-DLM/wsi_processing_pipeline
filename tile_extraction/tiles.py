@@ -769,6 +769,15 @@ class WsiHandler:
             M = cv2.getPerspectiveTransform(src_pts, dst_pts)
             warped = cv2.warpPerspective(pil_to_open_cv(bounds_pil), M, (width+1, height+1))
             return open_cv_to_pil(warped)
+        
+    def get_wsi_as_pil_image(self, level = 5):
+        wsi = openslide.open_slide(str(self.wsi_path))
+        large_w, large_h = wsi.level_dimensions[level]
+        #best_level_for_downsample = wsi.get_best_level_for_downsample(scale_factor)
+        new_w, new_h = wsi.level_dimensions[level]    
+        pil_img = wsi.read_region((0, 0), level, wsi.level_dimensions[level])
+        pil_img = pil_img.convert("RGB")
+        return pil_img
 
         
 class TileSummary:
