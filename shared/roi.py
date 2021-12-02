@@ -146,7 +146,7 @@ def __get_polygons_from_json(json_path:pathlib.Path)->List[__PolygonHelper]:
                 ##multipolygon-for-shapefiles-in-qgis/225373)
                 ##This loop separates Multipolygons into individual Polygons
                 for sub_polygon_vertices in multi_polygon_vertices:
-                    sub_polygon_vertices_array = np.array(sub_polygon_vertices).squeeze()
+                    sub_polygon_vertices_array = np.array(sub_polygon_vertices, dtype=object).squeeze()
                     if(len(sub_polygon_vertices_array.shape) == 2 and sub_polygon_vertices_array.shape[1] == 2):
                         #print(f'then: {sub_polygon_vertices_array.shape}')
                         polygons.append(__PolygonHelper(level=0, vertices=sub_polygon_vertices_array))
@@ -159,7 +159,7 @@ def __get_polygons_from_json(json_path:pathlib.Path)->List[__PolygonHelper]:
             elif(annotatin["geometry"]["type"] == 'Polygon'):
                 vertices = annotatin["geometry"]["coordinates"]
                 #print(f'Polygon: {np.array(vertices).squeeze().shape}')
-                polygons.append(__PolygonHelper(level=0, vertices=np.array(vertices).squeeze()))
+                polygons.append(__PolygonHelper(level=0, vertices=np.array(vertices, dtype=object).squeeze()))
             else:
                 assert False
             
