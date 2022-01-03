@@ -137,9 +137,9 @@ def __get_polygons_from_json(json_path:pathlib.Path)->List[__PolygonHelper]:
     """
     polygons = []
     with open(json_path) as json_file:
-        for annotatin in json.load(json_file):             
-            if(annotatin["geometry"]["type"] == 'MultiPolygon'):
-                multi_polygon_vertices = annotatin["geometry"]["coordinates"]
+        for annotation in json.load(json_file):             
+            if(annotation["geometry"]["type"] == 'MultiPolygon'):
+                multi_polygon_vertices = annotation["geometry"]["coordinates"]
                 #print(f'Multi Polygon: {np.array(multi_polygon_vertices).squeeze().shape}')
                 ##QuPath produces Polygons and Multipolygons 
                 ##(see difference here: https://gis.stackexchange.com/questions/225368/understanding-difference-between-polygon-and-
@@ -156,8 +156,8 @@ def __get_polygons_from_json(json_path:pathlib.Path)->List[__PolygonHelper]:
                             #print(f'else: {elem_array.shape}')
                             polygons.append(__PolygonHelper(level=0, vertices=elem_array))
                 
-            elif(annotatin["geometry"]["type"] == 'Polygon'):
-                vertices = annotatin["geometry"]["coordinates"]
+            elif(annotation["geometry"]["type"] == 'Polygon'):
+                vertices = annotation["geometry"]["coordinates"]
                 #print(f'Polygon: {np.array(vertices).squeeze().shape}')
                 polygons.append(__PolygonHelper(level=0, vertices=np.array(vertices, dtype=object).squeeze()))
             else:
