@@ -28,6 +28,7 @@ from pathlib import Path
 import datetime
 import numpy
 import numpy as np
+import PIL
 from PIL import Image, ImageDraw, ImageFont
 import matplotlib
 import matplotlib.pyplot as plt
@@ -57,6 +58,69 @@ def polygon_to_numpy(polygon:shapely.geometry.Polygon)->np.ndarray:
     y_values = polygon.exterior.coords.xy[1][:-1]
     return np.array([[x,y] for x,y in zip(x_values, y_values)])
 
+
+def get_wsi_with_rois_as_pil(wsi_path:pathlib.Path, 
+                       rois:List[RegionOfInterestPolygon], 
+                       figsize:Tuple[int] = (10,10), 
+                       scale_factor:int = 32,
+                       axis_off:bool = False):
+        """    
+        Loads a whole slide image, scales it down, converts it into a numpy array 
+        and displays it with the given rois.
+        Arguments:
+            figsize: Size of the plotted matplotlib figure containing the image.
+            scale_factor: The larger, the faster this method works, but the plotted image has less resolution.
+            wsi_path: Path to a whole-slide image
+            rois: List of rois.RegionOfInterestPolygon objects
+            axis_off: bool value that indicates, if axis shall be plotted with the picture
+        """
+        wsi_pil, large_w, large_h, new_w, new_h, best_level_for_downsample = tiles.wsi_to_scaled_pil_image(wsi_path,
+                                                                                            scale_factor=scale_factor,
+                                                                                            level=0)
+        rois_level_adjusted_numpy = []
+        for roi in rois:
+            roi_adj = roi.change_level_deep_copy(new_level=best_level_for_downsample)
+            #see constructor of matplotlib's Polygon: matplotlib.patches.Polygon
+            #it expects the coordinates as a numpy array of the shape [number_of_points x 2 ( == x-,y-coordinates)]
+            rois_level_adjusted_numpy.append(roi_adj.get_vertices())
+        return get_img_with_polygons_as_pil(wsi_pil, rois_level_adjusted_numpy)
+        
+#https://stackoverflow.com/questions/57316491/how-to-convert-matplotlib-figure-to-pil-image-object-without-saving-image        
+def fig2img(fig):
+    """Convert a Matplotlib figure to a PIL Image and return it"""
+    import io
+    buf = io.BytesIO()
+    fig.savefig(buf)
+    buf.seek(0)
+    img = Image.open(buf)
+    return img
+        
+def get_img_with_polygons_as_pil(img:Union[PIL.Image.Image, numpy.ndarray],  
+                                polygons_np:List[numpy.ndarray], 
+                                figsize:tuple=(10,10), 
+                                axis_off:bool=False):
+    """
+    Arguments:
+        img: img as PIL.Image.Image or numpy array
+        polygons_np: List of polygons where each polygon is a numpy array of shape [number_of_vertices x 2 ( == x-,y-coordinates)]
+        axis_off: bool value that indicates, if axis shall be plotted with the picture
+    """    
+    # Create figure and axes
+    fig,ax = plt.subplots(1,1,figsize=figsize)    
+    # Display the image
+    ax.imshow(img) 
+    
+    if(axis_off):
+        ax.axis('off')
+        
+    # Create a polygonal patch for each roi
+    for p in polygons_np:
+        polygon = matplotlib.patches.Polygon(xy=p, closed=True, linewidth=1, edgecolor='r', facecolor='none')    
+        # Add the patch to the Axes
+        ax.add_patch(polygon)    
+    return fig2img(img)
+
+
 def show_wsi_with_rois(wsi_path:pathlib.Path, 
                        rois:List[RegionOfInterestPolygon], 
                        figsize:Tuple[int] = (10,10), 
@@ -64,28 +128,24 @@ def show_wsi_with_rois(wsi_path:pathlib.Path,
                        axis_off:bool = False):
         """    
         Loads a whole slide image, scales it down, converts it into a numpy array 
-        and displays it with a grid overlay for all tiles,
-        that passed scoring to visualize which tiles e.g. "tiles.WsiOrROIToTilesMultithreaded" calculated as worthy to keep.
+        and displays it with with the given rois.
         Arguments:
             figsize: Size of the plotted matplotlib figure containing the image.
             scale_factor: The larger, the faster this method works, but the plotted image has less resolution.
-            tilesummary: a TileSummary object of one wsi
             wsi_path: Path to a whole-slide image
-            df_tiles: A pandas dataframe from e.g. "tiles.WsiOrROIToTilesMultithreaded" 
-                        with spacial information about all tiles 
+            rois: List of rois.RegionOfInterestPolygon objects
             axis_off: bool value that indicates, if axis shall be plotted with the picture
         """
         wsi_pil, large_w, large_h, new_w, new_h, best_level_for_downsample = tiles.wsi_to_scaled_pil_image(wsi_path,
                                                                                             scale_factor=scale_factor,
                                                                                             level=0)
-        wsi_np = pil_to_np_rgb(wsi_pil)
         rois_level_adjusted_numpy = []
         for roi in rois:
             roi_adj = roi.change_level_deep_copy(new_level=best_level_for_downsample)
             #see constructor of matplotlib's Polygon: matplotlib.patches.Polygon
             #it expects the coordinates as a numpy array of the shape [number_of_points x 2 ( == x-,y-coordinates)]
             rois_level_adjusted_numpy.append(roi_adj.get_vertices())
-        show_np_img_with_polygons(wsi_np, rois_level_adjusted_numpy, figsize, axis_off=axis_off)
+        show_img_with_polygons(wsi_pil, rois_level_adjusted_numpy, figsize, axis_off=axis_off)
         
         
 def adjust_level(value_to_adjust:int, from_level:int, to_level:int)->int:
@@ -114,13 +174,13 @@ def safe_dict_access(dict:Dict, key):
     except:
         return None
 
-def show_np_img_with_polygons(img:numpy.ndarray, 
+def show_img_with_polygons(img:Union[PIL.Image.Image, numpy.ndarray],  
                                 polygons_np:List[numpy.ndarray], 
                                 figsize:tuple=(10,10), 
                                 axis_off:bool=False):
     """
     Arguments:
-        img: img as numpy array
+        img: img as PIL.Image.Image or numpy array
         polygons_np: List of polygons where each polygon is a numpy array of shape [number_of_vertices x 2 ( == x-,y-coordinates)]
         axis_off: bool value that indicates, if axis shall be plotted with the picture
     """    
