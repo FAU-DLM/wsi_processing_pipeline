@@ -37,12 +37,16 @@ def filter_img(img_pil:PIL.Image.Image) -> PIL.Image.Image:
     """
     
     """
-    img_np = util.pil_to_np_rgb(img_pil)
-    grayscale_np = filter_rgb_to_grayscale(img_np)
-    complement_np = filter_complement(grayscale_np)
-    otsu_np = filter_otsu_threshold(complement_np).astype(np.bool)
-    filtered_img_np = util.mask_rgb(img_np, otsu_np)
-    return util.np_to_pil(filtered_img_np)
+    try:
+        img_np = util.pil_to_np_rgb(img_pil)
+        grayscale_np = filter_rgb_to_grayscale(img_np)
+        complement_np = filter_complement(grayscale_np)
+        otsu_np = filter_otsu_threshold(complement_np).astype(np.bool)
+        filtered_img_np = util.mask_rgb(img_np, otsu_np)
+        return util.np_to_pil(filtered_img_np)
+    except:
+        #TODO logging etc.
+        return None
 
 
 
