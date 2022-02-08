@@ -1018,6 +1018,9 @@ def score_tile_1(tile_pil:PIL.Image.Image)->Tuple[float, Dict]:
         used for calculating the score.
     """
     tile_pil_filtered = filter.filter_img(tile_pil)
+    if(tile_pil_filtered is None):
+        return 0.0, None
+    
     tile_np = pil_to_np_rgb(tile_pil)
     tile_np_filtered = pil_to_np_rgb(tile_pil_filtered)
     tissue_percentage = filter.tissue_percent(tile_np_filtered)
@@ -1311,7 +1314,7 @@ def WsisToTilesParallel(wsi_paths:List[pathlib.Path],
                              wsi_path_to_rois:Dict[pathlib.Path, List[shared.roi.RegionOfInterestPolygon]] = None,
                              minimal_tile_roi_intersection_ratio:float = 1.0,
                              verbose=False, 
-                             number_of_processes = None)-> Union[List[TileSummary], pandas.DataFrame]:
+                             number_of_processes = None)->List[TileSummary]:
     """
     The method WsiToTiles for a list of WSIs/ROIs in parallel.
     
@@ -1361,7 +1364,7 @@ def WsisToTilesParallel(wsi_paths:List[pathlib.Path],
         
     def error(e):
         print(e)
-    
+        
     with multiprocessing.Pool(processes=number_of_processes) as pool:
         for p in wsi_paths:
             pool.apply_async(WsiToTiles, 
@@ -1380,8 +1383,7 @@ def WsisToTilesParallel(wsi_paths:List[pathlib.Path],
                                    "verbose":verbose}, 
                                    callback=update, 
                                    error_callback=error)
-            
-                
+                                    
         pool.close()
         pool.join()
     
