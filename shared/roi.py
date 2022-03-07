@@ -181,7 +181,6 @@ def __validate_polygons(polygons:Sequence[__PolygonHelper])->Sequence[__PolygonH
     Returns:
         A new validated sequence of __PolygonHelper objects.
     """
-    
     validated_polygons = []
     for polygon in polygons:
         #remove structures with less than three vertices
@@ -226,8 +225,19 @@ def merge_overlapping_rois(rois:List[RegionOfInterestPolygon]):
         roi_0 = rois[0]
         intersecting_rois = []
         for r in rois[1:]:
-            if(roi_0.polygon.intersection(r.polygon).area > 0):
+            
+            try:
+                if(roi_0.polygon.intersection(r.polygon).area > 0):
                     intersecting_rois.append(r)
+            except shapely.geos.TopologicalError as e:
+                 #possible temporary fix could be "roi.polygon.buffer(0).intersection(rect_as_roi.polygon).area"
+                 #as described here: https://github.com/gboeing/osmnx/issues/278
+                 #but buffer(0) migth change the roi in an unexpectec way
+                 #intersection_area = roi.polygon.buffer(0).intersection(rect_as_roi.polygon).area
+                 
+                 #print(f'method tiles.Grid.filter_grid: {e}')
+                 continue
+           
         if(len(intersecting_rois) == 0):
             return
             
