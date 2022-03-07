@@ -451,7 +451,18 @@ class Grid:
                 elem = self.grid[row][col]
                 if(type(elem) is Rectangle):
                     rect_as_roi = elem.as_roi(level=self.level)
-                    intersection_area = roi.polygon.intersection(rect_as_roi.polygon).area
+                    try:
+                        intersection_area = roi.polygon.intersection(rect_as_roi.polygon).area
+                    except shapely.geos.TopologicalError as e:
+                        #possible temporary fix could be "roi.polygon.buffer(0).intersection(rect_as_roi.polygon).area"
+                        #as described here: https://github.com/gboeing/osmnx/issues/278
+                        #but buffer(0) migth change the roi in an unexpected way
+                        #intersection_area = roi.polygon.buffer(0).intersection(rect_as_roi.polygon).area
+                        
+                        #print(f'method tiles.Grid.filter_grid: {e}')
+                        self.grid[row][col] = None
+                        continue
+                                                                    
                     tile_area = rect_as_roi.polygon.area
                     intersection_quotient = intersection_area/tile_area
                     #remove tile from grid, if the intersection with the roi is too small
@@ -655,14 +666,19 @@ class GridManager:
         rect_level: wsi level
         """
         containing_rois = []
-        tile_poly = rect_tile.as_roi(level=rect_level)
         for roi in self.rois:
             if(roi.level != rect_level):
                 rect_tile = rect_tile.deepcopy().change_level(current_level=rect_level, 
                                                               new_level=roi.level)
-            if((roi.polygon.intersection(rect_tile.polygon()).area/rect_tile.polygon().area)\
-               >= minimal_tile_roi_intersection_ratio):
-                containing_rois.append(roi)
+                rect_level = roi.level
+            try:
+                if((roi.polygon.intersection(rect_tile.polygon()).area/rect_tile.polygon().area)\
+                       >= minimal_tile_roi_intersection_ratio):
+                            containing_rois.append(roi)
+            except Exception as e:
+                print('Excpetion in Method "get_rois_the_given_tile_is_in"')
+                pass
+                
         return containing_rois
     
     
@@ -1208,7 +1224,14 @@ def WsiToTiles(wsi_path:pathlib.Path,
     wsi_original_width, wsi_original_height = wsi.level_dimensions[level]
     best_level_for_downsample = wsi.get_best_level_for_downsample(scale_factor)
     wsi_scaled_width, wsi_scaled_height = wsi.level_dimensions[best_level_for_downsample]
-                   
+    
+    #print(wsi_path)
+    #print(tile_width)
+    #print(tile_height)
+    #print()
+    #print(grids_per_roi)
+    #print(level)
+    
     gm = GridManager(wsi_path=wsi_path, 
                     tile_width=tile_width, 
                      tile_height=tile_height, 
@@ -1220,7 +1243,12 @@ def WsiToTiles(wsi_path:pathlib.Path,
                                 minimal_intersection_quotient=minimal_tile_roi_intersection_ratio)
     else:
         gm.filter_grids(minimal_intersection_quotient=minimal_tile_roi_intersection_ratio)
-        
+    
+    
+    print(len(gm.get_all_rectangles()))
+    
+    
+    
     real_scale_factor = int(math.pow(2,best_level_for_downsample-level))
     tile_height_scaled = adjust_level(tile_height, level, best_level_for_downsample)
     tile_width_scaled = adjust_level(tile_width, level, best_level_for_downsample)
@@ -1245,7 +1273,7 @@ def WsiToTiles(wsi_path:pathlib.Path,
     
     wh = WsiHandler(wsi_path=wsi_path)
     
-    for n, r in enumerate(gm.get_all_rectangles()):
+    for n, r in enumerate(gm.get_all_rectangles()):        
         rect_tile_downsampled = r.deepcopy().change_level(current_level=level, 
                                                      new_level=best_level_for_downsample)       
         tile_pil_scaled_down = wh.extract_tile_from_wsi_2(rectangle_tile=rect_tile_downsampled, 
@@ -1254,26 +1282,29 @@ def WsiToTiles(wsi_path:pathlib.Path,
         #factors_dict is a dictionary which contains all factors 
         #that were relevant for determining the score
         #inside of the tile_scoring_function
-        score, factors_dict = tile_scoring_function(tile_pil=tile_pil_scaled_down)      
-        tile = Tile(tilesummary=tilesummary,
-                         tiles_folder_path=tiles_folder_path, 
-                         tile_num = n, 
-                         rectangle = r,
-                         rectangle_downsampled = rect_tile_downsampled, 
-                         score=score,
-                         dict_with_all_parameters_to_determine_score=factors_dict,
-                         tile_naming_func=tile_naming_func, 
-                         level=level, 
-                         level_downsampled=best_level_for_downsample, 
-                         real_scale_factor=real_scale_factor, 
-                        grid_manager=gm,
-                         roi=gm.get_rois_the_given_tile_is_in(rect_tile=rect_tile_downsampled,
-                                                              rect_level=best_level_for_downsample,
-                                        minimal_tile_roi_intersection_ratio=minimal_tile_roi_intersection_ratio))
-
-            
-        tilesummary.tiles.append(tile)
+        score, factors_dict = tile_scoring_function(tile_pil=tile_pil_scaled_down)  
+        
+        try:
+            tile = Tile(tilesummary=tilesummary,
+                             tiles_folder_path=tiles_folder_path, 
+                             tile_num = n, 
+                             rectangle = r,
+                             rectangle_downsampled = rect_tile_downsampled, 
+                             score=score,
+                             dict_with_all_parameters_to_determine_score=factors_dict,
+                             tile_naming_func=tile_naming_func, 
+                             level=level, 
+                             level_downsampled=best_level_for_downsample, 
+                             real_scale_factor=real_scale_factor, 
+                            grid_manager=gm,
+                             roi=gm.get_rois_the_given_tile_is_in(rect_tile=rect_tile_downsampled,
+                                                                  rect_level=best_level_for_downsample,
+                                            minimal_tile_roi_intersection_ratio=minimal_tile_roi_intersection_ratio)[0])
+            tilesummary.tiles.append(tile)
+        except IndexError as e:
+            print(f'IndexError in WsiToTiles for the rectangle: {r}')
     
+  
     if(save_tiles):
         for tile in tilesummary.top_tiles(verbose):
             tile.save_tile()
@@ -1307,7 +1338,8 @@ def WsisToTilesParallel(wsi_paths:List[pathlib.Path],
                              tile_width:int,
                              tile_naming_func:Callable = tile_naming_function_default,
                              tile_score_thresh:float = 0.55,
-                             tile_scoring_function = score_tile_1,  
+                             tile_scoring_function = score_tile_1,
+                             optimize_grid_angles:bool = False,
                              level = 0, 
                              save_tiles:bool = False,
                              tiles_folder_path:pathlib.Path=None,
@@ -1332,6 +1364,8 @@ def WsisToTilesParallel(wsi_paths:List[pathlib.Path],
                                     
     tile_score_thresh: Tiles with a score higher than the number from "tileScoringFunction" will be saved.
     tile_scoring_function: Function to score one tile to determine if it should be saved or not.
+    optimize_grid_angles: Finds the best rotation of the tiles for each roi to fit in
+                            the most tiles
     tile_naming_func: 99% of the time there should be no necessity to change this.
                         A function, that takes a pathlib.Path to the WSI 
                         or ROI as an argument and returns a string.
@@ -1374,7 +1408,8 @@ def WsisToTilesParallel(wsi_paths:List[pathlib.Path],
                                    "tile_width":tile_width,
                                    "tile_naming_func":tile_naming_func,
                                    "tile_score_thresh":tile_score_thresh, 
-                                   "tile_scoring_function":tile_scoring_function, 
+                                   "tile_scoring_function":tile_scoring_function,
+                                   "optimize_grid_angles":optimize_grid_angles,
                                    "level":level, 
                                    "save_tiles":save_tiles,
                                    "tiles_folder_path":tiles_folder_path,
