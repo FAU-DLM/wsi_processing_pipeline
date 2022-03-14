@@ -20,11 +20,12 @@ class RegionOfInterest(ABC):
     
     roi_id:str = None
     whole_slide_image:WholeSlideImage = None
-    labels:List[int] = None
+    labels:List[Union[int,str]] = None
     __tiles:List[Tile] = None
-    def __init__(self, roi_id:str, whole_slide_image:WholeSlideImage = None):
+    def __init__(self, roi_id:str, whole_slide_image:WholeSlideImage = None, labels:List[Union[int,str]]=None):
         self.roi_id = roi_id
         self.whole_slide_image = whole_slide_image
+        self.labels = labels
         self.__tiles = []
         
     def is_removed(self):
@@ -73,7 +74,8 @@ class RegionOfInterestPolygon(RegionOfInterest):
     def __init__(self,
                  roi_id:str,
                  vertices:np.ndarray,  
-                 level:int):
+                 level:int, 
+                 labels:List[Union[int,str]]=None):
         """
             Arguments:
             roi_id: a unique id for the roi
@@ -81,8 +83,9 @@ class RegionOfInterestPolygon(RegionOfInterest):
             level: level of the whole-slide image. 0 means highest resolution. 
                     Leave it 0 if you use e.g. png files instead of a 
                     whole-slide image format like .ndpi
+            labels: List of classification labels
         """
-        super().__init__(roi_id=roi_id)
+        super().__init__(roi_id=roi_id, labels=labels)
         self.polygon = Polygon(vertices)
         self.level = level
         
@@ -120,9 +123,10 @@ class RegionOfInterestPolygon(RegionOfInterest):
         return dc
     
 class __PolygonHelper:
-    def __init__(self, level:int, vertices:Sequence[Tuple[float, float]]):
+    def __init__(self, level:int, vertices:Sequence[Tuple[float, float]], labels:List[Union[int,str]]=None):
         self.level = level
         self.vertices = vertices
+        self.labels = labels
 
 def __get_polygons_from_json(json_path:pathlib.Path)->List[__PolygonHelper]:
     """
@@ -205,7 +209,10 @@ def get_list_of_RegionOfInterestPolygon_from_json(json_path:pathlib.Path,
     rois = []
     for n, polygon_helper in enumerate(validate_polygons_func(polygons_from_json_func(json_path))):
         roi_id = f'{json_path.stem}_roi_number_{str(n)}'
-        rois.append(RegionOfInterestPolygon(roi_id=roi_id, vertices=polygon_helper.vertices, level=polygon_helper.level))
+        rois.append(RegionOfInterestPolygon(roi_id=roi_id, 
+                                            vertices=polygon_helper.vertices, 
+                                            level=polygon_helper.level, 
+                                            labels = polygon_helper.labels))
     return rois
 
 
