@@ -1052,6 +1052,47 @@ def score_tile_1(tile_pil:PIL.Image.Image)->Tuple[float, Dict]:
                   
     return score, {"color_factor":color_factor, "s_and_v_factor":s_and_v_factor}
 
+
+def __scoring_function_muscle(tissue_percent, combined_factor):
+    """
+    This favors pink over purple regions (muscle tissue has few nuclei and lots of sarcoplam, which
+    is pink in H&E staining). color_factor and s_and_v_factor are higher, 
+    the more hematoxylin stained tissue is in the image
+    """
+    if(combined_factor == 0):
+        return tissue_percent / 2
+    else:
+        return (100/(combined_factor)) * tissue_percent / 100   
+
+    
+def scoring_function_muscle(tile_pil:PIL.Image.Image)->Tuple[float, Dict]:
+    """
+    Arguments:
+        tile_pil: The tile as a PIL Image
+    Return:
+        The tile's score and a dictionary with all factors that were calculated from the PIL Image and 
+        used for calculating the score.
+    """
+    tile_pil_filtered = filter.filter_img(tile_pil)
+    if(tile_pil_filtered is None):
+        return 0.0, None
+    
+    tile_np = pil_to_np_rgb(tile_pil)
+    tile_np_filtered = pil_to_np_rgb(tile_pil_filtered)
+    tissue_percentage = filter.tissue_percent(tile_np_filtered)
+    
+    color_factor = hsv_purple_pink_factor(tile_np)
+    s_and_v_factor = hsv_saturation_and_value_factor(tile_np)
+    
+    combined_factor = color_factor * s_and_v_factor   
+    score = __scoring_function_muscle(tissue_percentage, combined_factor)
+                    
+    # scale score to between 0 and 1
+    score = 1.0 - (10.0 / (10.0 + score))
+                  
+    return score, {"color_factor":color_factor, "s_and_v_factor":s_and_v_factor}
+
+
 def scoring_function_1(tissue_percent, combined_factor):
     """
     use this, if you want tissue with lots of cells (lots of hematoxylin stained tissue)
@@ -1107,7 +1148,7 @@ def ExtractTileFromWSI(path:Union[str, pathlib.Path], x:int, y:int, width:int, h
         tile as PIL.Image as RGB
     """
     s = slide.open_slide(str(path))
-    tile_region = s.read_region((x, y), level, (width, height))
+    tile_region = s.read_region((int(x), int(y)), level, (int(width), int(height)))
     # RGBA to RGB
     pil_img = tile_region.convert("RGB")
     return pil_img
@@ -1462,7 +1503,7 @@ def tile_to_pil_tile(tile:Tile):
       Return:
         Tile as a PIL image.
       """
-      return ExtractTileFromWSI(tile.tile_summary.wsi_path, 
+      return ExtractTileFromWSI(tile.tilesummary.wsi_path, 
                                 tile.get_x(), 
                                 tile.get_y(), 
                                 tile.get_width(), 
