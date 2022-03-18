@@ -141,7 +141,8 @@ class Tile:
         return pathlib.Path(tiles.get_tile_image_path(self))
                   
     def get_name(self)->str:
-        return pathlib.Path(tiles.get_tile_image_path(self)).name
+        #return pathlib.Path(tiles.get_tile_image_path(self)).name
+        return self.__str__()
     
     def get_dataset_type(self)->shared.enums.DatasetType:
         return self.roi.whole_slide_image.case.patient.dataset_type
