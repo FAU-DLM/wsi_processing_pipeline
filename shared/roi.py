@@ -254,11 +254,14 @@ def merge_overlapping_rois(rois:List[RegionOfInterestPolygon]):
                 
         merged_poly = roi_0.polygon
         merged_roi_id = roi_0.roi_id
+        merged_labels = []
         for r in intersecting_rois:
             merged_poly = merged_poly.union(r.polygon)
             merged_roi_id = merged_roi_id + " + " + r.roi_id
+            merged_labels += r.labels
         merged_roi = RegionOfInterestPolygon(roi_id=merged_roi_id, 
                                              vertices=polygon_to_numpy(polygon=merged_poly),
-                                             level=roi_0.level)
+                                             level=roi_0.level, 
+                                             labels=merged_labels)
         rois.append(merged_roi)
         merge_overlapping_rois(rois=rois)
