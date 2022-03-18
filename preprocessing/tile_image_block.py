@@ -7,7 +7,7 @@ from wsi_processing_pipeline.preprocessing.objects import NamedObject
 import shared
 
 
-class TileImage():
+class TileImage(fastuple):
     '''
     This class creates a TensorImage from a wsi_processing_pipeline.shared.tiles.Tile object.
     additionally the show method enables to display the Tile object as an image
@@ -24,7 +24,6 @@ class TileImage():
             t = tensor(img)
             t = t.permute(2,0,1)
         else: t = img
-        #line = t.new_zeros(t.shape[0], t.shape[1], 10)
         return fastai.torch_core.show_image(t,title=title, ctx=ctx, **kwargs)   
 
 def label_tl_image(t:shared.tile.Tile): 
