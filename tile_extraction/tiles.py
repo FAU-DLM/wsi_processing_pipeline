@@ -982,15 +982,14 @@ class TileSummary:
         plt.show() 
     
     
-    def show_wsi_with_top_tiles(self, 
+    def show_wsi_with_all_possible_tiles(self, 
                                    figsize:Tuple[int] = (10,10),
                                    scale_factor:int = 32, 
                                    axis_off:bool = False):
         """    
         Loads a whole slide image, scales it down, converts it into a numpy array and displays 
         it with a grid overlay for all tiles
-        that passed scoring to visualize which tiles 
-        e.g. "tiles.WsiOrROIToTilesMultithreaded" calculated as worthy to keep.
+        that could fit in the given rois or if no rois are given in the whole wsi.
         Arguments:
             figsize: Size of the plotted matplotlib figure containing the image.
             scale_factor: The larger, the faster this method works, 
@@ -1001,7 +1000,27 @@ class TileSummary:
                                                        scale_factor=scale_factor, 
                                                        axis_off=axis_off)
 
-                                 
+    def show_wsi_with_top_tiles(self, 
+                                   figsize:Tuple[int] = (10,10),
+                                   scale_factor:int = 32, 
+                                   axis_off:bool = False):
+        """    
+        Loads a whole slide image, scales it down, converts it into a numpy array and displays 
+        it with a grid overlay for all tiles
+        that passed scoring to visualize which tiles 
+        e.g. "tiles.WsiIToTilesParallel" calculated as worthy to keep.
+        Arguments:
+            figsize: Size of the plotted matplotlib figure containing the image.
+            scale_factor: The larger, the faster this method works, 
+                            but the plotted image has less resolution.
+            axis_off: bool value that indicates, if axis shall be plotted with the picture
+        """
+        util.show_wsi_with_rois(wsi_path=self.wsi_path, 
+                        rois=self.rois+[t.rectangle.as_roi(level=t.level) for t in self.top_tiles()], 
+                        figsize=figsize, 
+                        scale_factor=scale_factor, 
+                        axis_off=axis_off)
+        
     def show_wsi_with_rois(self, 
                            figsize:Tuple[int] = (10,10),
                            scale_factor:int = 32, 
