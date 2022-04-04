@@ -3,7 +3,7 @@ from __future__ import annotations #https://stackoverflow.com/questions/33837918
 from typing import List, Tuple, Union, Sequence
 from shared.wsi import WholeSlideImage
 from shared.case import Case
-from tile_extraction import util
+from tile_extraction import util, tiles
 from util import polygon_to_numpy
 import copy
 import shapely
@@ -12,6 +12,9 @@ import numpy as np
 import json
 
 from abc import ABC, abstractmethod
+from enum import Enum
+import PIL
+import pickle
 
 
 class RegionOfInterest(ABC):
@@ -265,3 +268,105 @@ def merge_overlapping_rois(rois:List[RegionOfInterestPolygon]):
                                              labels=merged_labels)
         rois.append(merged_roi)
         merge_overlapping_rois(rois=rois)
+        
+        
+########
+# roi adjustment for .mrxs wsi files, since openslide adds black padding
+########
+
+
+def is_row_black(img:Union[PIL.Image.Image, numpy.ndarray], row_num:int)->bool:
+    if(type(img) is PIL.Image.Image):
+        img = util.pil_to_np_rgb(img)
+    return np.all(img[row_num, :, :] == [0,0,0])
+
+def is_column_black(img:Union[PIL.Image.Image, numpy.ndarray], column_num:int)->bool:
+    if(type(img) is PIL.Image.Image):
+        img = util.pil_to_np_rgb(img)
+    return np.all(img[:, column_num, :] == [0,0,0])
+
+def get_num_of_black_rows_at_top(img:Union[PIL.Image.Image, numpy.ndarray])->int:
+    n_rows = 0
+    while(is_row_black(img=img, row_num=n_rows)):
+        n_rows += 1
+    return n_rows
+
+def get_num_of_black_columns_at_left(img:Union[PIL.Image.Image, numpy.ndarray])->int:
+    n_columns = 0
+    while(is_column_black(img=img, column_num=n_columns)):
+        n_columns += 1
+    return n_columns
+
+class Row_or_col(Enum):
+    ROW = 1
+    COLUMN = 2
+    
+def is_only_black_white(img:Union[PIL.Image.Image, numpy.ndarray], index:int, row_or_col:Row_or_col)->bool:
+    """
+    checks if the by index specified row or column in the image contains only [0,0,0] == black
+    or [255,255,255] == white RGB values
+    """
+    if(type(img) is PIL.Image.Image):
+        img = util.pil_to_np_rgb(img)
+    a = None
+    if(row_or_col is Row_or_col.ROW):
+        a = img[index, :, :]
+    elif(row_or_col is Row_or_col.COLUMN):
+        a = img[:, index, :]
+    else:
+        raise ValueError('row_or_col has insufficient value')
+    return np.where(np.logical_and(np.ravel(a) > 0, np.ravel(a) < 255))[0].size == 0
+
+def get_num_of_only_black_white(img:Union[PIL.Image.Image, numpy.ndarray], row_or_col:Row_or_col)->int:
+    n = 0
+    while(is_only_black_white(img=img, index=n, row_or_col=row_or_col)):
+        n += 1
+    return n
+
+def adjust_rois_mrxs(wsi_path:pathlib.Path, 
+                rois:List[RegionOfInterestPolygon])->List[RegionOfInterestPolygon]:
+    """
+    Openslide adds black padding when opening a .mrxs file.
+    That leads to misaligned ROIs.
+    This method adjusts the coordinates of the ROIS.
+    It returns new RegionOfInterestPolygon objects.
+    """
+    wsi_img_level = 5
+    
+    wh = tiles.WsiHandler(wsi_path=wsi_path)
+    wsi_img = wh.get_wsi_as_pil_image(level=wsi_img_level)
+    
+    cols_left = get_num_of_only_black_white(img=wsi_img, row_or_col=Row_or_col.COLUMN)
+    rows_top = get_num_of_only_black_white(img=wsi_img, row_or_col=Row_or_col.ROW)
+    rois_adjusted = []
+    for r in rois:
+        new_vertices = util.polygon_to_numpy(r.polygon)
+        new_vertices += [util.adjust_level(value_to_adjust=cols_left, from_level=wsi_img_level, to_level=r.level), 
+                         util.adjust_level(value_to_adjust=rows_top, from_level=wsi_img_level, to_level=r.level)]
+        r_new = RegionOfInterestPolygon(roi_id=r.roi_id, vertices=new_vertices, level=r.level, labels=r.labels)
+        rois_adjusted.append(r_new)
+
+    return rois_adjusted
+
+def save_as_pickle(obj:object, path):
+    with open(path, 'wb') as file:
+        pickle.dump(obj, file)
+
+def load_pickle(path):
+    with open(path, 'rb') as file:
+        return pickle.load(file)
+
+def adjust_mrxs_and_save_rois(wsi_path:pathlib.Path, 
+                         rois:List[RegionOfInterestPolygon], 
+                         save_directory:pathlib.Path)->List[RegionOfInterestPolygon]:        
+    save_name = f'{wsi_path.stem}-rois_adjusted.pickle'
+    save_path = save_directory/save_name
+    if(not save_path.exists()):    
+        wh = tiles.WsiHandler(wsi_path=wsi_path)       
+        rois_adjusted = adjust_rois_mrxs(wsi_path=wsi_path, rois=rois)               
+        save_as_pickle(rois_adjusted, save_path)
+    else:
+        print(f'Already exists: {save_path}')
+        rois_adjusted = load_pickle(save_path)
+        
+    return rois_adjusted
