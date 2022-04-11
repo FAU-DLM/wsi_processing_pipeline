@@ -237,7 +237,9 @@ def merge_overlapping_rois(rois:List[RegionOfInterestPolygon]):
         for r in rois[1:]:
             
             try:
-                if(roi_0.polygon.intersection(r.polygon).area > 0):
+                if(roi_0.polygon.intersection(r.polygon).area > 0 \
+                   and ((roi_0.labels is None and r.labels is None) or (set(roi_0.labels) == set (r.labels)))\
+                  ):
                     intersecting_rois.append(r)
             except shapely.geos.TopologicalError as e:
                  #possible temporary fix could be "roi.polygon.buffer(0).intersection(rect_as_roi.polygon).area"
