@@ -49,6 +49,38 @@ from shapely import geometry
 ADDITIONAL_NP_STATS = False
 
 
+def switch_origin_of_shapely_polygon(polygon:shapely.geometry.Polygon,
+                                                      polygon_level:int,
+                                                      wsi_height:int, 
+                                                      wsi_height_level:int)->shapely.geometry.Polygon:
+        """
+        shapely assumes the coordinate origin in the lower left corner (y values grow upwards)
+        the wsi processing lib assumes it in the upper left corner
+        This func returns a new polygon object with adjusted vertices.
+        
+        Arguments:
+            polygon: the roi represented as a shapley polygon
+            polygon_level: wsi have different zoom levels; the zoom level of the vertices of the polygon
+            wsi_height: the height of the whole-slide image
+            wsi_height_level: wsi have different zoom levels; the zoom level of the given height
+        """
+        if(polygon_level != wsi_height_level):
+            wsi_height = adjust_level(value_to_adjust=wsi_height, 
+                                           from_level=wsi_height_level, 
+                                           to_level=polygon_level)
+        
+        
+        vertices_numpy_old = polygon_to_numpy(polygon)
+        vertices_numpy_new = np.zeros(shape=vertices_numpy_old.shape)
+        i=0
+        for x,y in vertices_numpy_old:       
+            vertices_numpy_new[i][0] = x
+            vertices_numpy_new[i][1] = abs(wsi_height - y)
+            i+=1
+            
+        return shapely.geometry.Polygon(vertices_numpy_new)
+
+
 def polygon_to_numpy(polygon:shapely.geometry.Polygon)->np.ndarray:
     """
     Converts shapely.geometry.Polygon into numpy array of the shape [number_of_vertices, 2] ( == x-,y-coordinate)
