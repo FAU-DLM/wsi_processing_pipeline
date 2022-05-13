@@ -70,6 +70,8 @@ class RegionOfInterestPreextracted(RegionOfInterest):
 class RegionOfInterestPolygon(RegionOfInterest):
     """
     represents a polygonal region of interest within a whole-slide image
+    y-values are assumed to grow downwards <=> coordinate origin is in the upper left corner of the image
+    shapely assumes the origin in the lower left corner
     """
     level:int = None
     polygon:shapely.geometry.Polygon = None
@@ -99,7 +101,7 @@ class RegionOfInterestPolygon(RegionOfInterest):
     def get_vertices(self)->np.ndarry:
         """
         Returns a numpy array with shape [number_of_vertices, 2] where the second dimension represents x,y-coordinates of
-        each vertex
+        each vertex. The coordinate origin is assumed in the upper left corner of the image.
         """       
         return polygon_to_numpy(self.polygon)
        
@@ -124,6 +126,22 @@ class RegionOfInterestPolygon(RegionOfInterest):
         dc = copy.deepcopy(self)
         dc.change_level_in_place(new_level=new_level)
         return dc
+    
+    def get_shapely_polygon_adjusted_to_origin_upper_left(self,
+                                                      wsi_height:int, 
+                                                      wsi_height_level:int)->shapely.geometry.Polygon:
+        """
+        shapely assumes the coordinate origin in the lower left corner (y values grow upwards)
+        the wsi processing lib assumes it in the upper left corner
+        
+        Arguments:
+            wsi_height: the height of the whole-slide image
+            wsi_height_level: wsi have different zoom levels, the zoom level of the given height
+        """
+        return util.switch_origin_of_shapely_polygon(polygon=self.polygon,
+                                                      polygon_level=self.level,
+                                                      wsi_height=wsi_height, 
+                                                      wsi_height_level=wsi_height_level)
     
 class __PolygonHelper:
     def __init__(self, level:int, vertices:Sequence[Tuple[float, float]], labels:List[Union[int,str]]=None):
@@ -270,8 +288,7 @@ def merge_overlapping_rois(rois:List[RegionOfInterestPolygon]):
                                              labels=merged_labels)
         rois.append(merged_roi)
         merge_overlapping_rois(rois=rois)
-        
-        
+                   
 ########
 # roi adjustment for .mrxs wsi files, since openslide adds black padding
 ########
