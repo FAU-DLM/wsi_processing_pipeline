@@ -1044,10 +1044,11 @@ class TileSummary:
 # some example/default implementations for functions that other methods below take as arguments
 ###
 
-def score_tile_1(tile_pil:PIL.Image.Image)->Tuple[float, Dict]:
+def score_tile_by_tp_and_cf(tile_pil:PIL.Image.Image, scoring_function:Callable)->Tuple[float, Dict]:
     """
     Arguments:
         tile_pil: The tile as a PIL Image
+        a function that takes the tissue percentage and the combined factor as arguments
     Return:
         The tile's score and a dictionary with all factors that were calculated from the PIL Image and 
         used for calculating the score.
@@ -1064,13 +1065,32 @@ def score_tile_1(tile_pil:PIL.Image.Image)->Tuple[float, Dict]:
     s_and_v_factor = hsv_saturation_and_value_factor(tile_np)
     
     combined_factor = color_factor * s_and_v_factor   
-    score = scoring_function_1(tissue_percentage, combined_factor)
+    score = scoring_function(tissue_percentage, combined_factor)
                     
     # scale score to between 0 and 1
     score = 1.0 - (10.0 / (10.0 + score))
                   
     return score, {"color_factor":color_factor, "s_and_v_factor":s_and_v_factor}
 
+def score_tile_1(tile_pil:PIL.Image.Image)->Tuple[float, Dict]:
+    """
+    Arguments:
+        tile_pil: The tile as a PIL Image
+    Return:
+        The tile's score and a dictionary with all factors that were calculated from the PIL Image and 
+        used for calculating the score.
+    """
+    return score_tile_by_tp_and_cf(tile_pil=tile_pil, scoring_function=scoring_function_1)
+
+def score_tile_2(tile_pil:PIL.Image.Image)->Tuple[float, Dict]:
+    """
+    Arguments:
+        tile_pil: The tile as a PIL Image
+    Return:
+        The tile's score and a dictionary with all factors that were calculated from the PIL Image and 
+        used for calculating the score.
+    """
+    return score_tile_by_tp_and_cf(tile_pil=tile_pil, scoring_function=scoring_function_2)
 
 def __scoring_function_muscle(tissue_percent, combined_factor):
     """
