@@ -42,7 +42,11 @@ class Tile:
     labels_one_hot_encoded:numpy.ndarray = None
     predictions_raw:Dict[str,float] = None # key: class name; value: predicted probability
     predictions_thresh:Dict[str, bool] = None # key: class name; value: bool
+    
+    #result from learner.predict from exported learner
+    predictions_fastai_inference = None # e.g.: ((#1) ['Ganglioglioma'], tensor([False,  True]), tensor([0.0013, 0.9987]))
     loss:float = None
+    
                 
     def __init__(self, 
                  tilesummary, 
