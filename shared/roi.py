@@ -144,7 +144,7 @@ class RegionOfInterestPolygon(RegionOfInterest):
                                                       wsi_height_level=wsi_height_level)
     
 class __PolygonHelper:
-    def __init__(self, level:int, vertices:Sequence[Tuple[float, float]], labels:List[Union[int,str]]=None):
+    def __init__(self, level:int, vertices:Sequence[Tuple[float, float]], labels:List[Union[int,str]]=[]):
         self.level = level
         self.vertices = vertices
         self.labels = labels
