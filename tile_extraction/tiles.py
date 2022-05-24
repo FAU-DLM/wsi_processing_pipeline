@@ -248,7 +248,7 @@ class Rectangle:
         self.rotate_around_pivot_without_orientation_change(angle=angle, pivot=pivot)
         return self
     
-    def as_roi(self, level)->shared.roi.RegionOfInterestPolygon:
+    def as_roi(self, level:int, labels:List[str]=[])->shared.roi.RegionOfInterestPolygon:
         """
         Creates and returns a RegionOfInterestPolygon from its values.
         Arguments:
@@ -256,7 +256,8 @@ class Rectangle:
         """
         return shared.roi.RegionOfInterestPolygon(roi_id=self.__str__(), 
                                                   vertices=self.__call__(), 
-                                                  level = level)
+                                                  level = level, 
+                                                  labels=labels)
     
     def as_shapely_polygon(self)->shapely.geometry.Polygon:
         ul = (self.ul.x, self.ul.y)
