@@ -18,6 +18,42 @@ import shapely
 from shapely import wkt
 
 
+def lists_overlap(a:List, b:List)->bool:
+    """
+    Returns True, if the two lists have an overlap, else False
+    """
+    return bool((set(a), set(b)))
+
+def get_annotations(image:cytomine.models.ImageInstance)->cytomine.models.AnnotationCollection:
+    """
+    Returns all annotations of the image.
+    """
+    annotations = AnnotationCollection()
+    annotations.image = image.id
+    return annotations.fetch()
+
+def get_annotations_with_term_filter(image:cytomine.models.ImageInstance, 
+                    included_terms:List[str], 
+                    excluded_terms:List[str])->List[cytomine.models.Annotation]:
+    """
+    Arguments:
+        image: cytomine ImageInstance
+        included_terms: Only annotations, which have all specified term names, will be returned
+        excluded_terms: Only annotations, which do not have any of these terms, will be returned
+    Returns:
+         List of annotations
+    
+    """
+    annotations_filtered = []
+    for a in get_annotations(image=image):
+        terms = util_cytomine.get_terms_of_annotation(a.fetch())
+        term_names = [t.name for t in terms]
+        if(not lists_overlap(a=excluded_terms, b=term_names) and set(included_terms).issubset(term_names)):
+            annotations_filtered.append(a)
+    return annotations_filtered
+
+
+
 def get_cytomine_image_instance_for_wsi_name(wsi_name:str, 
                                              project:cytomine.models.project.Project=None)\
                                             ->List[cytomine.models.image.ImageInstance]:
@@ -68,9 +104,10 @@ def get_project_for_image(image:cytomine.models.image.ImageInstance,
     
     
 def delete_all_annotations(image:cytomine.models.ImageInstance):
-    annotations = AnnotationCollection()
-    annotations.image = image.id
-    annotations.fetch()
+    for a in get_annotations(image=image):
+        a.delete()
+        
+def delete_annotations(annotations:Union[List[cytomine.models.Annotation], cytomine.models.AnnotationCollection]):
     for a in annotations:
         a.delete()
 
