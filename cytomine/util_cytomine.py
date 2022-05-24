@@ -18,6 +18,39 @@ import shapely
 from shapely import wkt
 
 
+
+def add_rois_as_annotation_to_image(image:cytomine.models.ImageInstance, 
+                                   rois:List[roi.RegionOfInterestPolygon],
+                                   term_names:List[str] = [],
+                                   wsi_path:pathlib.Path=None):
+    """
+    Arguments:
+        image: cytomine.models.ImageInstance
+        roi: list of wsi_processing_pipeline.roi.RegionOfInterestPolygon objects
+        term_names: additional term names, which will be added to each annotation. roi.labels will also be added
+                    as terms
+        wsi_path: if this is left None, the wsi will be downloaded from the server and deleted afterwards
+    """
+    was_downloaded = False
+    if(wsi_path is None or not wsi_path.exists()):
+        wsi_path = download_wsi(image=image)
+        was_downloaded = True
+        
+    wsi = openslide.open_slide(str(wsi_path))
+    project = get_project_for_image(image=image)
+    for r in rois:
+        poly = r.get_shapely_polygon_adjusted_to_origin_upper_left(wsi_height=wsi.dimensions[1], 
+                                                                   wsi_height_level=0)
+        anno = Annotation(location=poly.wkt, 
+                          id_image=image.id).save()
+        add_terms_to_annotation(annotation=anno, 
+                                              terms = r.labels+term_names, 
+                                              ontology_id=project.ontology)
+    
+    
+    if(was_downloaded):
+        wsi_path.delete()
+
 def lists_overlap(a:List, b:List)->bool:
     """
     Returns True, if the two lists have an overlap, else False
@@ -46,7 +79,7 @@ def get_annotations_with_term_filter(image:cytomine.models.ImageInstance,
     """
     annotations_filtered = []
     for a in get_annotations(image=image):
-        terms = util_cytomine.get_terms_of_annotation(a.fetch())
+        terms = get_terms_of_annotation(a.fetch())
         term_names = [t.name for t in terms]
         if(not lists_overlap(a=excluded_terms, b=term_names) and set(included_terms).issubset(term_names)):
             annotations_filtered.append(a)
@@ -54,8 +87,8 @@ def get_annotations_with_term_filter(image:cytomine.models.ImageInstance,
 
 
 
-def get_cytomine_image_instance_for_wsi_name(wsi_name:str, 
-                                             project:cytomine.models.project.Project=None)\
+def get_cytomine_image_instances_for_wsi_name(wsi_name:str, 
+                                             projects:List[cytomine.models.project.Project]=None)\
                                             ->List[cytomine.models.image.ImageInstance]:
     """
     Iterates through the given project and looks for the given wsi.
@@ -67,10 +100,7 @@ def get_cytomine_image_instance_for_wsi_name(wsi_name:str,
     Returns:
         List of all cytomine.models.image.ImageInstance objects that match. May be an empty list.
     """
-    projects = None
-    if(project is not None):
-        projects = [project]
-    else:
+    if(projects is None or len(projects)==0):
         projects = ProjectCollection().fetch()
     
     found_images = []
@@ -182,8 +212,28 @@ def get_terms_of_annotation(annotation:cytomine.models.Annotation)->List[cytomin
             annotation_terms.append(t)
     return annotation_terms
 
+def download_wsi(image:cytomine.models.ImageInstance, directory:pathlib.Path=None)->pathlib.Path:
+    """
+    Arguments:
+        image: cytomine ImageInstance
+        directory: the directory, where the wsi will be downloaded to. If not specified, the 
+                    wsi will be downloaded to ./tmp
+        
+    Returns:
+        Path to wsi
+    """
+    
+    if(directory is None):
+        directory = Path('./tmp')
+    directory.mkdir(exist_ok=True)
+    wsi_path = directory/image.filename
+    downloaded = False
+    while(not downloaded):
+        downloaded = image.download(dest_pattern=str(wsi_path), override=False)
+    return wsi_path
+
 def get_image_instance_annotations_as_rois(image:cytomine.models.ImageInstance, 
-                                           wsi_path:pathlib.Path)->List[roi.RegionOfInterestPolygon]:
+                                           wsi_path:pathlib.Path=None)->List[roi.RegionOfInterestPolygon]:
     """
     Arguments:
         image: cytomine ImageInstance object
@@ -193,14 +243,11 @@ def get_image_instance_annotations_as_rois(image:cytomine.models.ImageInstance,
         List of wsi_processing_pipeline.shared.roi.RegionOfInterestPolygon objects
     
     """
-    tmp_wsi_path = None
+    was_downloaded = False
     if(wsi_path is None or not wsi_path.exists()):
-        tmp_dir = Path('./tmp')
-        tmp_dir.mkdir(exist_ok=True)
-        tmp_wsi_path = tmp_dir/image.filename
-        downloaded = False
-        while(not downloaded):
-            downloaded = image.download(dest_pattern=str(tmp_wsi_path), override=False)
+        wsi_path = download_wsi(image=image)
+        was_downloaded = True
+        
     
     
     #open image
@@ -230,6 +277,6 @@ def get_image_instance_annotations_as_rois(image:cytomine.models.ImageInstance,
                                 labels=labels)
         rois.append(r)
             
-    if(tmp_wsi_path is not None):
-        tmp_wsi_path.delete()
+    if(was_downloaded):
+        wsi_path.delete()
     return rois
