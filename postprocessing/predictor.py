@@ -26,25 +26,39 @@ import multiprocessing
 class Predictor:  
     learner:fastai.learner.Learner = None
     patient_manager: shared.patient_manager.PatientManager = None
+    prediction_type: shared.enums.PredictionType = None
+    classes:List[str] = None
     
     def __init__(self, 
                  learner:fastai.learner.Learner,
-                 patient_manager:shared.patient_manager.PatientManager):
+                 patient_manager:shared.patient_manager.PatientManager, 
+                 prediction_type:shared.enums.PredictionType, 
+                 classes:List[str]=None):
         """
         Arguments:
             This is a convenience class for mapping predictions on tile level to corresponding predictions on whole-slide
             image and case level.
                
             learner: fastai learner used for prediction
-            patient_manager: 
+            patient_manager:
+            prediction_type: classification, regression ...
+            classes: list of the classes the model predicts; currently only necessary if it's a regression model
         """
         if learner == None:
             raise ValueError("learner must not be None")
         if patient_manager == None:
             raise ValueError("patient_manager must not be None")
+        if prediction_type == None:
+            raise ValueError("prediction_type must not be None")
+        if prediction_type == shared.enums.PredictionType.regression and (classes is None or len(classes)==0):
+            raise ValueError("classes must not be None or empty if prediction_type is regression")
+           
                
         self.learner = learner
         self.patient_manager = patient_manager
+        self.prediction_type = prediction_type
+        self.classes = classes
+        
     
     def __one_hot_encode(self, vocab:List[Union[str, int]], labels:List[Union[str, int]])->numpy.ndarray:
         """
@@ -62,7 +76,7 @@ class Predictor:
         return ohe_labels
             
     def __build_dataloader(self, 
-                           pred_type:shared.enums.PredictionType,
+                           tile_retrieval_type:shared.enums.TileRetrievalType,
                            dataset_type:shared.enums.DatasetType,
                            tile_size:int, 
                            batch_size:int)->typing.Tuple[fastai.data.core.DataLoaders, List[shared.tile.Tile]]:
@@ -71,11 +85,11 @@ class Predictor:
         ###
         block_x = None
         get_x = None
-        if(pred_type == shared.enums.PredictionType.preextracted_tiles):
+        if(tile_retrieval_type == shared.enums.TileRetrievalType.preextracted_tiles):
             block_x = fastai.vision.data.ImageBlock
             get_x = lambda x: x.tile_path
             
-        elif(pred_type == shared.enums.PredictionType.tiles_on_the_fly):
+        elif(tile_retrieval_type == shared.enums.TileRetrievalType.tiles_on_the_fly):
             block_x = preprocessing.tile_image_block.TileImageBlock
             get_x=lambda x: x
             
@@ -138,11 +152,11 @@ class Predictor:
             tiles_to_predict[i].loss = predictions[2][i].item()
             
     def __buildDl_predict_set_preds(self, 
-                                    pred_type:shared.enums.PredictionType.preextracted_tiles, 
+                                    tile_retrieval_type:shared.enums.TileRetrievalType.preextracted_tiles, 
                                     dataset_type:shared.enums.DatasetType, 
                                     tile_size:int, 
                                     batch_size:int):        
-        dl_pred, tiles_to_predict = self.__build_dataloader(pred_type=pred_type,
+        dl_pred, tiles_to_predict = self.__build_dataloader(tile_retrieval_type=tile_retrieval_type,
                                                             dataset_type=dataset_type,
                                                              tile_size=tile_size, 
                                                              batch_size = batch_size)
@@ -158,18 +172,26 @@ class Predictor:
     #                             with_loss=True)
     
     def __predict(self, dataset_type:shared.enums.DatasetType, tile):
-        tile.labels_one_hot_encoded = self.__one_hot_encode(vocab=self.get_classes(), labels=tile.get_labels())
-        
         _,_, preds_raw = self.learner.predict(tile)
         predictions_raw = {}
         for Class, pred_raw in zip(self.get_classes(), preds_raw):
             predictions_raw[Class] = pred_raw            
         tile.predictions_raw = predictions_raw
-   
-        tile.loss = self.learner.loss_func(preds_raw, torch.tensor(tile.labels_one_hot_encoded))  
-    
+        
+        if(self.prediction_type==shared.enums.PredictionType.regression):
+            pass
+            #TODO
+            #tile.loss = 
+            
+        elif(self.prediction_type==shared.enums.PredictionType.classification_multicategory):
+            tile.labels_one_hot_encoded = self.__one_hot_encode(vocab=self.get_classes(), 
+                                                                labels=tile.get_labels())          
+            tile.loss = self.learner.loss_func(preds_raw, torch.tensor(tile.labels_one_hot_encoded))
+        else:
+            assert False
+            
     def predict_on_tiles(self,
-                         prediction_type: shared.enums.PredictionType,
+                         tile_retrieval_type: shared.enums.TileRetrievalType,
                          dataset_type:shared.enums.DatasetType, 
                          tile_size:int, 
                          batch_size:int):
@@ -178,7 +200,7 @@ class Predictor:
         in the attribute "predictions_raw". No thresholds are applied here.
         
         Arguments:
-            prediction_type: - preextracted_tiles => use this, if the patient manager uses tiles, that have already been
+            tile_retrieval_type: - preextracted_tiles => use this, if the patient manager uses tiles, that have already been
                                 extracted and saved to disc as images
                              - tiles_on_the_fly => use this, if the patient manager was created with tilesummary objects
                                                      that contain the regional information about each tile and the tiles
@@ -186,14 +208,12 @@ class Predictor:
                                                     of interest) on the fly during dataloading.
             dataset_type: only tiles with this dataset_type will be used for prediction
             tile_size: tiles will be resized to this size by the dataloader
-        Results:
-            
         """
         ###
         # There is currently a bug in learner.get_preds() which leads to completely wrong predictions
         # learner.predict is a lot slower, but it gives correct predictions
         ###
-        #self.__buildDl_predict_set_preds(pred_type=prediction_type, 
+        #self.__buildDl_predict_set_preds(tile_retrieval_type=tile_retrieval_type, 
         #                                dataset_type=dataset_type, 
         #                                 tile_size=tile_size, 
         #                                 batch_size=batch_size)
@@ -222,7 +242,10 @@ class Predictor:
 
         
     def get_classes(self):
-        return self.learner.dls.vocab
+        if(self.prediction_type == shared.enums.PredictionType.classification_multicategory):
+            return self.learner.dls.vocab
+        elif (self.prediction_type == shared.enums.PredictionType.regression):
+            return self.classes
     
     
     
@@ -423,7 +446,7 @@ class Predictor:
                                        k:int, 
                                        seed:int, 
                                        iteration_to_weights:Dict[int, pathlib.Path], 
-                                       prediction_type:shared.enums.PredictionType, 
+                                       tile_retrieval_type:shared.enums.TileRetrievalType, 
                                        tile_size:int, 
                                        batch_size:int):
         """
@@ -443,7 +466,7 @@ class Predictor:
                     tiles that the model had already seen during training and would therefore be pointless.
             iteration_to_weights: A dictionary with the numbers of iteration as keys and the associated model weights
                                     as values.
-            prediction_type:
+            tile_retrieval_type:
             tile_size:
             batch_size:
         Result:
@@ -469,7 +492,7 @@ class Predictor:
             ##
             # make predictions for the current validation set
             ##
-            self.predict_on_tiles(prediction_type=prediction_type, 
+            self.predict_on_tiles(tile_retrieval_type=tile_retrieval_type, 
                                   dataset_type=shared.enums.DatasetType.validation,
                                   tile_size=tile_size, 
                                   batch_size=batch_size)
