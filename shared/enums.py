@@ -11,8 +11,12 @@ class TissueQuantity(Enum):
   LOW = 1
   MEDIUM = 2
   HIGH = 3
-    
+
 class PredictionType(Enum):
+    classification_multicategory = 0
+    regression = 1
+    
+class TileRetrievalType(Enum):
     preextracted_tiles = 0
     tiles_on_the_fly = 1
     
