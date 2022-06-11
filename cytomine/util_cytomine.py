@@ -85,6 +85,14 @@ def get_annotations_with_term_filter(image:cytomine.models.ImageInstance,
             annotations_filtered.append(a)
     return annotations_filtered
 
+def delete_all_annotations(image:cytomine.models.ImageInstance):
+    for a in get_annotations(image=image):
+        a.delete()
+        
+def delete_annotations(annotations:Union[List[cytomine.models.Annotation], cytomine.models.AnnotationCollection]):
+    for a in annotations:
+        a.delete()
+
 
 
 def get_cytomine_image_instances_for_wsi_name(wsi_name:str, 
@@ -131,15 +139,6 @@ def get_project_for_image(image:cytomine.models.image.ImageInstance,
         if(p.id == image.project):
             return p
     return None
-    
-    
-def delete_all_annotations(image:cytomine.models.ImageInstance):
-    for a in get_annotations(image=image):
-        a.delete()
-        
-def delete_annotations(annotations:Union[List[cytomine.models.Annotation], cytomine.models.AnnotationCollection]):
-    for a in annotations:
-        a.delete()
 
 def get_ontology_by_id(ontology_id:int)->Union[cytomine.models.Ontology, None]:
     """
