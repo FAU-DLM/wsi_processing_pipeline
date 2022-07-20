@@ -72,6 +72,8 @@ def get_annotations_with_term_filter(image:cytomine.models.ImageInstance,
     Arguments:
         image: cytomine ImageInstance
         included_terms: Only annotations, which have all specified term names, will be returned
+                        If this is left empty, all terms, which are not in excluded terms, will be
+                        taken into account
         excluded_terms: Only annotations, which do not have any of these terms, will be returned
     Returns:
          List of annotations
@@ -169,11 +171,13 @@ def get_term_by_name(term_name:str, ontology_id:int)->cytomine.models.Term:
         
     #look for the term in all ontologies
     #unfortunately TermCollection().fetch() has a bug and returns 403 Forbidden even as admin
+    #TODO: try cytomine.open_admin_session() as seen in this post
+    #https://forum.image.sc/t/how-to-delete-cytomine-algorithm-and-how-to-update-descriptor-json/68885/2?u=christoph_neuner
     os = OntologyCollection().fetch()
     for o in os:
         for t in TermCollection().fetch_with_filter("ontology", o.id):
             if(t.name == term_name):
-                return Term(name=term_name, id_ontology=ontology_id, color=term.color).save()
+                return Term(name=term_name, id_ontology=ontology_id, color=t.color).save()
     
     # could not find the term in any ontology => create it for the given ontology_id with a random color
     else:
