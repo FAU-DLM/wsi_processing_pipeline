@@ -338,8 +338,8 @@ class PatientManager:
             raise ValueError("validation_size must be in range [0, 1)")
         if(test_size < 0 or test_size > 1):
             raise ValueError("test_size must be in range [0,1]")
-        if(train_size + validation_size + test_size != 1):
-            raise ValueError("train_size, validation_size and test_size must add up to 1")
+        #if(train_size + validation_size + test_size != 1):
+            #raise ValueError("train_size, validation_size and test_size must add up to 1")
         
         np.random.seed(random_state)
         random.seed(random_state)
